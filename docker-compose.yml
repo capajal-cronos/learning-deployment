@@ -1,0 +1,70 @@
+# =============================================================================
+# docker-compose.yml — local development orchestration
+# =============================================================================
+# WHAT this file does:
+#   - Defines THREE services: db, backend, frontend.
+#   - Connects them on a private Docker network so they can find each other by
+#     name (e.g. `backend` resolves to the backend container's IP).
+#   - Mounts volumes so DB data and source code survive container restarts.
+#
+# WHY we use Compose locally:
+#   - Mirrors the multi-service structure you'll deploy in the cloud.
+#   - One command brings everything up: `docker compose up`.
+#   - Forces you to think about networking (which port? which name?) early.
+# =============================================================================
+
+services:
+  # ---- PostgreSQL database ----
+  db:
+    image: postgres:16-alpine
+    # Postgres reads these env vars on first startup to create the user + db.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      # Named volume → data persists even if you `docker compose down`.
+      - db-data:/var/lib/postgresql/data
+    # Only expose Postgres to localhost. Containers still reach it via "db:5432".
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ---- FastAPI backend ----
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_MINUTES: ${JWT_EXPIRES_MINUTES}
+    # Wait until Postgres reports healthy before starting.
+    depends_on:
+      db:
+        condition: service_healthy
+    # Bind only to localhost on the host — the frontend reaches backend INSIDE
+    # the Docker network, so we don't have to publish it widely.
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  # ---- React + Express frontend ----
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      BACKEND_URL: http://backend:8000  # internal DNS name → no external traffic
+      PORT: 3000
+    depends_on:
+      - backend
+    # This is the only service that needs to be reachable from your browser.
+    ports:
+      - "3000:3000"
+
+# Named volumes survive `docker compose down`. Use `docker compose down -v`
+# to wipe the database.
+volumes:
+  db-data:

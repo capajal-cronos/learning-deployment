@@ -1,0 +1,129 @@
+<mxfile host="app.diagrams.net" agent="TaskBoard tutorial">
+  <diagram name="TaskBoard architecture" id="taskboard-arch-001">
+    <mxGraphModel dx="1500" dy="561" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=16;fontStyle=1;" value="TaskBoard — Architecture (Browser → VPC → Compute → DB, plus the CI/CD path)" vertex="1">
+          <mxGeometry height="30" width="1120" x="40" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="browser" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" value="User&#xa;(Browser)" vertex="1">
+          <mxGeometry height="60" width="120" x="60" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="internet" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666;fontSize=12;" value="Internet" vertex="1">
+          <mxGeometry height="60" width="120" x="60" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="firewall" parent="1" style="shape=mxgraph.cisco.security.firewall;html=1;pointerEvents=1;dashed=0;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" value="GCP Firewall&#xa;(VPC ingress rules)&#xa;allow tcp 80,443 → app" vertex="1">
+          <mxGeometry height="60" width="120" x="60" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="vpc" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1f5fe;strokeColor=#0277bd;dashed=1;strokeWidth=2;verticalAlign=top;fontSize=13;fontStyle=1;align=left;spacingLeft=10;spacingTop=8;" value="VPC: taskboard-vpc (custom mode, regional)" vertex="1">
+          <mxGeometry height="640" width="660" x="240" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="subnet" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#ef6c00;dashed=1;strokeWidth=1;verticalAlign=top;fontSize=12;fontStyle=1;align=left;spacingLeft=10;spacingTop=8;" value="Subnet: app-subnet (10.10.0.0/24)" vertex="1">
+          <mxGeometry height="570" width="620" x="260" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="appvm" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#2e7d32;verticalAlign=top;fontSize=12;fontStyle=1;spacingTop=8;" value="App VM: taskboard-app&#xa;tag=app · internal 10.10.0.5 · external IP attached" vertex="1">
+          <mxGeometry height="240" width="280" x="280" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="frontend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#2e7d32;fontSize=11;" value="Express + React (built)&#xa;container : 3000&#xa;serves SPA + proxies /api/*" vertex="1">
+          <mxGeometry height="70" width="240" x="300" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="backend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#2e7d32;fontSize=11;" value="FastAPI&#xa;container : 8000&#xa;JWT auth, SQLAlchemy" vertex="1">
+          <mxGeometry height="70" width="240" x="300" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="e_fe_be" edge="1" parent="1" source="frontend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#2e7d32;endArrow=classic;" target="backend">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dbvm" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;verticalAlign=top;fontSize=12;fontStyle=1;spacingTop=8;" value="DB VM: taskboard-db&#xa;tag=db · internal 10.10.0.6 · NO external IP" vertex="1">
+          <mxGeometry height="240" width="260" x="600" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="postgres" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c2185b;fontSize=11;" value="PostgreSQL 16&#xa;listens on :5432&#xa;pg_hba: 10.10.0.0/24 only" vertex="1">
+          <mxGeometry height="80" width="220" x="620" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="e_be_db" edge="1" parent="1" source="backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#c2185b;endArrow=classic;fontSize=10;" target="postgres" value="SQL :5432&#xa;allow-internal-db (10.10.0.0/24)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#888;dashed=1;fontSize=10;align=left;spacingLeft=8;" value="Inside the VPC, services find each other&#xa;by name via GCP internal DNS:&#xa;  • backend → taskboard-db&#xa;Traffic does NOT leave the subnet." vertex="1">
+          <mxGeometry height="80" width="290" x="280" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="ipnote" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#888;dashed=1;fontSize=10;align=left;spacingLeft=8;" value="Internal IPs: 10.10.0.x&#xa;Reachable only inside the VPC.&#xa;External IP: only on app VM.&#xa;Reachable from the public internet." vertex="1">
+          <mxGeometry height="80" width="270" x="590" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="startup" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#888;dashed=1;fontSize=10;align=left;spacingLeft=8;" value="VM startup scripts (run as root on 1st boot)&#xa;  • app VM: install Docker&#xa;  • db VM:  install Postgres + pg_hba" vertex="1">
+          <mxGeometry height="60" width="580" x="280" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="fwtable" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff8e1;strokeColor=#f57f17;fontSize=10;align=left;spacingLeft=8;fontStyle=0;" value="Firewall rules on this VPC&#xa;  allow-ssh-from-iap     tcp:22   src 35.235.240.0/20    → tag app,db&#xa;  allow-http-public       tcp:80,443  src 0.0.0.0/0       → tag app&#xa;  allow-internal-db        tcp:5432   src 10.10.0.0/24    → tag db" vertex="1">
+          <mxGeometry height="70" width="580" x="280" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="dev" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" value="Developer&#xa;(laptop)" vertex="1">
+          <mxGeometry height="60" width="160" x="960" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="github" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" value="GitHub repository&#xa;main branch" vertex="1">
+          <mxGeometry height="60" width="160" x="960" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="ci" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="GitHub Actions runner&#xa;test → lint → build → push → deploy" vertex="1">
+          <mxGeometry height="80" width="200" x="940" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="artifact" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" value="Artifact Registry&#xa;&lt;region&gt;-docker.pkg.dev/.../taskboard&#xa;backend:&lt;sha&gt; · frontend:&lt;sha&gt;" vertex="1">
+          <mxGeometry height="80" width="200" x="940" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="secrets" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" value="Secret Manager&#xa;jwt-secret · db-password" vertex="1">
+          <mxGeometry height="60" width="200" x="940" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="wif" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" value="Workload Identity Federation&#xa;(GitHub OIDC → GCP token)&#xa;no static JSON keys" vertex="1">
+          <mxGeometry height="70" width="200" x="940" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="browser" style="endArrow=classic;html=1;rounded=0;strokeColor=#6c8ebf;fontSize=10;" target="internet" value="HTTPS / HTTP">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="internet" style="endArrow=classic;html=1;rounded=0;strokeColor=#b85450;" target="firewall">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="firewall" style="endArrow=classic;html=1;rounded=0;strokeColor=#2e7d32;fontSize=10;" target="frontend" value="allow tcp 80,443&#xa;target tag=app">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_dev_gh" edge="1" parent="1" source="dev" style="endArrow=classic;html=1;rounded=0;strokeColor=#d6b656;fontSize=10;" target="github" value="git push">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_gh_ci" edge="1" parent="1" source="github" style="endArrow=classic;html=1;rounded=0;strokeColor=#d6b656;fontSize=10;" target="ci" value="webhook">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_ci_ar" edge="1" parent="1" source="ci" style="endArrow=classic;html=1;rounded=0;strokeColor=#82b366;fontSize=10;" target="artifact" value="docker push">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ci_wif" edge="1" parent="1" source="ci" style="endArrow=classic;dashed=1;html=1;rounded=0;strokeColor=#82b366;fontSize=10;" target="wif" value="OIDC token exchange">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ar_vm" edge="1" parent="1" source="artifact" style="endArrow=classic;html=1;rounded=0;strokeColor=#82b366;fontSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" target="appvm" value="docker pull&#xa;(at deploy time)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_sm_vm" edge="1" parent="1" source="secrets" style="endArrow=classic;html=1;rounded=0;strokeColor=#82b366;fontSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" target="appvm" value="read jwt-secret&#xa;read db-password">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ci_vm" edge="1" parent="1" source="ci" style="endArrow=classic;dashed=1;html=1;rounded=0;strokeColor=#666;fontSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" target="appvm" value="gcloud ssh --tunnel-through-iap&#xa;docker pull + docker run">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="legendBox" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=11;fontStyle=1;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;" value="Legend" vertex="1">
+          <mxGeometry height="120" width="1080" x="60" y="740" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_user" parent="1" style="text;html=1;align=left;fontSize=10;" value="↦ User traffic (HTTPS in, HTTP/internal out)" vertex="1">
+          <mxGeometry height="20" width="320" x="80" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_ci" parent="1" style="text;html=1;align=left;fontSize=10;" value="↦ CI/CD pipeline path (build, push, deploy)" vertex="1">
+          <mxGeometry height="20" width="320" x="80" y="780" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_db" parent="1" style="text;html=1;align=left;fontSize=10;" value="↦ Backend → DB traffic (private, 10.10.0.0/24 only)" vertex="1">
+          <mxGeometry height="20" width="380" x="80" y="800" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_dashed" parent="1" style="text;html=1;align=left;fontSize=10;" value="-- dashed arrows = control plane / identity / out-of-band" vertex="1">
+          <mxGeometry height="20" width="380" x="80" y="820" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_note" parent="1" style="text;html=1;align=left;fontSize=10;fontStyle=2;" value="Note: HTTPS is rendered here for clarity; this tutorial deploys with HTTP only on the VM and discusses adding HTTPS in chapter 13." vertex="1">
+          <mxGeometry height="40" width="600" x="500" y="780" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
