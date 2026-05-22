@@ -26,6 +26,16 @@ copy .env.example .env      # Windows cmd / PowerShell
 
 Open `.env` and change `POSTGRES_PASSWORD` to anything you like for local use. The rest of the defaults will work.
 
+> ⚠️ **If you change `POSTGRES_PASSWORD`, also update the password inside `DATABASE_URL`** a few lines below. Postgres uses `POSTGRES_PASSWORD` when the container first initializes; the backend uses the password embedded in `DATABASE_URL` to connect. If they don't match, the backend will crash on startup with `password authentication failed for user "taskboard"`.
+>
+> ```env
+> POSTGRES_PASSWORD=my-new-password
+> DATABASE_URL=postgresql+psycopg://taskboard:my-new-password@db:5432/taskboard
+> #                                          ^^^^^^^^^^^^^^^ must match
+> ```
+>
+> If you already started the stack with a mismatched password, the database volume was initialized with the old value. Run `docker compose down -v` to wipe it before bringing things back up.
+
 > ⚠️ **Pitfall**
 > `.env` is git-ignored. `.env.example` is not. Never put real passwords in `.env.example`. Pretend you're sharing it with the internet — because eventually you will be.
 
