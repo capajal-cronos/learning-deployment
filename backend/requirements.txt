@@ -21,7 +21,7 @@ bcrypt==4.0.1
 pyjwt==2.9.0
 
 # Data validation (FastAPI uses this for request bodies)
-pydantic==2.9.2
+pydantic[email]==2.9.2
 pydantic-settings==2.5.2
 
 # --- dev / test dependencies ---
