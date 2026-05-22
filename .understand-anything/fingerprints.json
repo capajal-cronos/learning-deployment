@@ -1,0 +1,1236 @@
+{
+  "version": "1.0.0",
+  "gitCommitHash": "fa02a0e1257ee14fc8b3a07e8652c80e3402126b",
+  "generatedAt": "2026-05-22T19:41:37.488Z",
+  "files": {
+    ".env.example": {
+      "filePath": ".env.example",
+      "contentHash": "a8edff3cfca5ade8148de5e34e405275a6bddef8f97ad5e07512b532df7e6867",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 33,
+      "hasStructuralAnalysis": true
+    },
+    ".github/workflows/ci-cd.yml": {
+      "filePath": ".github/workflows/ci-cd.yml",
+      "contentHash": "3499bdb862d18aa7ecec0569c8a9d24a48b5370cd93679ba1e2d4342173ed6f7",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 251,
+      "hasStructuralAnalysis": true
+    },
+    "README.md": {
+      "filePath": "README.md",
+      "contentHash": "06f74d7b1366d8dd286004ce505cc46864ee7395d7b922be64b0cdc7787b239c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 113,
+      "hasStructuralAnalysis": true
+    },
+    "architecture.drawio": {
+      "filePath": "architecture.drawio",
+      "contentHash": "77db948f3557880d56f268a8773efc4fe064a42376c93edd86d7affe789cd77d",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 130,
+      "hasStructuralAnalysis": false
+    },
+    "backend/.dockerignore": {
+      "filePath": "backend/.dockerignore",
+      "contentHash": "c39bcc75fabfffe0df5df763dd67053f0d6fde0fd8d3b2252d8c2aecc6b4e5c8",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 12,
+      "hasStructuralAnalysis": false
+    },
+    "backend/Dockerfile": {
+      "filePath": "backend/Dockerfile",
+      "contentHash": "80bb3c22cfb43234c4f5e39269fd44064f262ca9f2065bf771562938e869c604",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 54,
+      "hasStructuralAnalysis": true
+    },
+    "backend/app/__init__.py": {
+      "filePath": "backend/app/__init__.py",
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "backend/app/auth.py": {
+      "filePath": "backend/app/auth.py",
+      "contentHash": "ec4fc5feec69024f0d0e46570acb959d2a3331928ec3e061ca21f13784818b71",
+      "functions": [
+        {
+          "name": "hash_password",
+          "params": [
+            "plain"
+          ],
+          "returnType": "str",
+          "exported": true,
+          "lineCount": 2
+        },
+        {
+          "name": "verify_password",
+          "params": [
+            "plain",
+            "hashed"
+          ],
+          "returnType": "bool",
+          "exported": true,
+          "lineCount": 2
+        },
+        {
+          "name": "create_access_token",
+          "params": [
+            "user_id"
+          ],
+          "returnType": "str",
+          "exported": true,
+          "lineCount": 9
+        },
+        {
+          "name": "get_current_user",
+          "params": [
+            "authorization",
+            "db"
+          ],
+          "returnType": "User",
+          "exported": true,
+          "lineCount": 22
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "datetime",
+          "specifiers": [
+            "datetime",
+            "timedelta",
+            "timezone"
+          ]
+        },
+        {
+          "source": "jwt",
+          "specifiers": [
+            "jwt"
+          ]
+        },
+        {
+          "source": "fastapi",
+          "specifiers": [
+            "Depends",
+            "Header",
+            "HTTPException",
+            "status"
+          ]
+        },
+        {
+          "source": "passlib.context",
+          "specifiers": [
+            "CryptContext"
+          ]
+        },
+        {
+          "source": "sqlalchemy.orm",
+          "specifiers": [
+            "Session"
+          ]
+        },
+        {
+          "source": ".config",
+          "specifiers": [
+            "get_settings"
+          ]
+        },
+        {
+          "source": ".database",
+          "specifiers": [
+            "get_db"
+          ]
+        },
+        {
+          "source": ".models",
+          "specifiers": [
+            "User"
+          ]
+        }
+      ],
+      "exports": [
+        "hash_password",
+        "verify_password",
+        "create_access_token",
+        "get_current_user"
+      ],
+      "totalLines": 68,
+      "hasStructuralAnalysis": true
+    },
+    "backend/app/config.py": {
+      "filePath": "backend/app/config.py",
+      "contentHash": "610ce14efefd72e581e7c21531e461848250da7c49ab0d3aaec97cd84535a740",
+      "functions": [
+        {
+          "name": "get_settings",
+          "params": [],
+          "returnType": "Settings",
+          "exported": true,
+          "lineCount": 3
+        }
+      ],
+      "classes": [
+        {
+          "name": "Settings",
+          "methods": [],
+          "properties": [
+            "database_url",
+            "jwt_secret",
+            "jwt_algorithm",
+            "jwt_expires_minutes",
+            "cors_origins"
+          ],
+          "exported": true,
+          "lineCount": 14
+        }
+      ],
+      "imports": [
+        {
+          "source": "functools",
+          "specifiers": [
+            "lru_cache"
+          ]
+        },
+        {
+          "source": "pydantic_settings",
+          "specifiers": [
+            "BaseSettings",
+            "SettingsConfigDict"
+          ]
+        }
+      ],
+      "exports": [
+        "Settings",
+        "get_settings"
+      ],
+      "totalLines": 38,
+      "hasStructuralAnalysis": true
+    },
+    "backend/app/database.py": {
+      "filePath": "backend/app/database.py",
+      "contentHash": "adb72a9c7e6e6da1bf2e4db0d7412b4a6336ec239e9392332a7180f4afca918d",
+      "functions": [
+        {
+          "name": "get_db",
+          "params": [],
+          "returnType": "Generator[Session, None, None]",
+          "exported": true,
+          "lineCount": 11
+        }
+      ],
+      "classes": [
+        {
+          "name": "Base",
+          "methods": [],
+          "properties": [],
+          "exported": true,
+          "lineCount": 2
+        }
+      ],
+      "imports": [
+        {
+          "source": "collections.abc",
+          "specifiers": [
+            "Generator"
+          ]
+        },
+        {
+          "source": "sqlalchemy",
+          "specifiers": [
+            "create_engine"
+          ]
+        },
+        {
+          "source": "sqlalchemy.orm",
+          "specifiers": [
+            "DeclarativeBase",
+            "Session",
+            "sessionmaker"
+          ]
+        },
+        {
+          "source": ".config",
+          "specifiers": [
+            "get_settings"
+          ]
+        }
+      ],
+      "exports": [
+        "Base",
+        "get_db"
+      ],
+      "totalLines": 46,
+      "hasStructuralAnalysis": true
+    },
+    "backend/app/main.py": {
+      "filePath": "backend/app/main.py",
+      "contentHash": "f0c8270236b139b5ee8e3a6fe0dde6ab9a769dc08a8cf8d40615adbf64e3df40",
+      "functions": [
+        {
+          "name": "on_startup",
+          "params": [],
+          "returnType": "None",
+          "exported": true,
+          "lineCount": 9
+        },
+        {
+          "name": "healthz",
+          "params": [],
+          "returnType": "dict[str, str]",
+          "exported": true,
+          "lineCount": 3
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "fastapi",
+          "specifiers": [
+            "FastAPI"
+          ]
+        },
+        {
+          "source": "fastapi.middleware.cors",
+          "specifiers": [
+            "CORSMiddleware"
+          ]
+        },
+        {
+          "source": ".config",
+          "specifiers": [
+            "get_settings"
+          ]
+        },
+        {
+          "source": ".database",
+          "specifiers": [
+            "Base",
+            "engine"
+          ]
+        },
+        {
+          "source": ".routers",
+          "specifiers": [
+            "auth_routes",
+            "task_routes"
+          ]
+        }
+      ],
+      "exports": [
+        "on_startup",
+        "healthz"
+      ],
+      "totalLines": 53,
+      "hasStructuralAnalysis": true
+    },
+    "backend/app/models.py": {
+      "filePath": "backend/app/models.py",
+      "contentHash": "5d6de6452b215eb35bfbe01a2aa91f259648a1309b8d57fd86e5c7c0e91a0c9b",
+      "functions": [],
+      "classes": [
+        {
+          "name": "User",
+          "methods": [],
+          "properties": [
+            "id",
+            "email",
+            "password_hash",
+            "created_at",
+            "tasks"
+          ],
+          "exported": true,
+          "lineCount": 10
+        },
+        {
+          "name": "Task",
+          "methods": [],
+          "properties": [
+            "id",
+            "title",
+            "description",
+            "done",
+            "created_at",
+            "owner_id",
+            "owner"
+          ],
+          "exported": true,
+          "lineCount": 11
+        }
+      ],
+      "imports": [
+        {
+          "source": "datetime",
+          "specifiers": [
+            "datetime"
+          ]
+        },
+        {
+          "source": "sqlalchemy",
+          "specifiers": [
+            "Boolean",
+            "DateTime",
+            "ForeignKey",
+            "String",
+            "Text",
+            "func"
+          ]
+        },
+        {
+          "source": "sqlalchemy.orm",
+          "specifiers": [
+            "Mapped",
+            "mapped_column",
+            "relationship"
+          ]
+        },
+        {
+          "source": ".database",
+          "specifiers": [
+            "Base"
+          ]
+        }
+      ],
+      "exports": [
+        "User",
+        "Task"
+      ],
+      "totalLines": 40,
+      "hasStructuralAnalysis": true
+    },
+    "backend/app/routers/__init__.py": {
+      "filePath": "backend/app/routers/__init__.py",
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "backend/app/routers/auth_routes.py": {
+      "filePath": "backend/app/routers/auth_routes.py",
+      "contentHash": "3d9d9ab67d770d0fbf224d5ed78ea950dabd9d7d2bb571be8451c544c6e97425",
+      "functions": [
+        {
+          "name": "register",
+          "params": [
+            "payload",
+            "db"
+          ],
+          "returnType": "User",
+          "exported": true,
+          "lineCount": 10
+        },
+        {
+          "name": "login",
+          "params": [
+            "payload",
+            "db"
+          ],
+          "returnType": "TokenResponse",
+          "exported": true,
+          "lineCount": 7
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "fastapi",
+          "specifiers": [
+            "APIRouter",
+            "Depends",
+            "HTTPException",
+            "status"
+          ]
+        },
+        {
+          "source": "sqlalchemy",
+          "specifiers": [
+            "select"
+          ]
+        },
+        {
+          "source": "sqlalchemy.orm",
+          "specifiers": [
+            "Session"
+          ]
+        },
+        {
+          "source": "..auth",
+          "specifiers": [
+            "create_access_token",
+            "hash_password",
+            "verify_password"
+          ]
+        },
+        {
+          "source": "..database",
+          "specifiers": [
+            "get_db"
+          ]
+        },
+        {
+          "source": "..models",
+          "specifiers": [
+            "User"
+          ]
+        },
+        {
+          "source": "..schemas",
+          "specifiers": [
+            "LoginRequest",
+            "TokenResponse",
+            "UserCreate",
+            "UserOut"
+          ]
+        }
+      ],
+      "exports": [
+        "register",
+        "login"
+      ],
+      "totalLines": 35,
+      "hasStructuralAnalysis": true
+    },
+    "backend/app/routers/task_routes.py": {
+      "filePath": "backend/app/routers/task_routes.py",
+      "contentHash": "6364bdaad974c0dc4172067d5b4e32b5f6e6c0ea64eb204fe520080f93ad8bfc",
+      "functions": [
+        {
+          "name": "list_tasks",
+          "params": [
+            "db",
+            "user"
+          ],
+          "returnType": "list[Task]",
+          "exported": true,
+          "lineCount": 5
+        },
+        {
+          "name": "create_task",
+          "params": [
+            "payload",
+            "db",
+            "user"
+          ],
+          "returnType": "Task",
+          "exported": true,
+          "lineCount": 10
+        },
+        {
+          "name": "update_task",
+          "params": [
+            "task_id",
+            "payload",
+            "db",
+            "user"
+          ],
+          "returnType": "Task",
+          "exported": true,
+          "lineCount": 21
+        },
+        {
+          "name": "delete_task",
+          "params": [
+            "task_id",
+            "db",
+            "user"
+          ],
+          "returnType": "None",
+          "exported": true,
+          "lineCount": 11
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "fastapi",
+          "specifiers": [
+            "APIRouter",
+            "Depends",
+            "HTTPException",
+            "status"
+          ]
+        },
+        {
+          "source": "sqlalchemy",
+          "specifiers": [
+            "select"
+          ]
+        },
+        {
+          "source": "sqlalchemy.orm",
+          "specifiers": [
+            "Session"
+          ]
+        },
+        {
+          "source": "..auth",
+          "specifiers": [
+            "get_current_user"
+          ]
+        },
+        {
+          "source": "..database",
+          "specifiers": [
+            "get_db"
+          ]
+        },
+        {
+          "source": "..models",
+          "specifiers": [
+            "Task",
+            "User"
+          ]
+        },
+        {
+          "source": "..schemas",
+          "specifiers": [
+            "TaskCreate",
+            "TaskOut",
+            "TaskUpdate"
+          ]
+        }
+      ],
+      "exports": [
+        "list_tasks",
+        "create_task",
+        "update_task",
+        "delete_task"
+      ],
+      "totalLines": 71,
+      "hasStructuralAnalysis": true
+    },
+    "backend/app/schemas.py": {
+      "filePath": "backend/app/schemas.py",
+      "contentHash": "25b35293ce83609628753f383a8a157b15ee93cfd237cd601f53b0240fa48e67",
+      "functions": [],
+      "classes": [
+        {
+          "name": "UserCreate",
+          "methods": [],
+          "properties": [
+            "email",
+            "password"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "UserOut",
+          "methods": [],
+          "properties": [
+            "id",
+            "email",
+            "created_at"
+          ],
+          "exported": true,
+          "lineCount": 7
+        },
+        {
+          "name": "LoginRequest",
+          "methods": [],
+          "properties": [
+            "email",
+            "password"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "TokenResponse",
+          "methods": [],
+          "properties": [
+            "access_token",
+            "token_type"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "TaskCreate",
+          "methods": [],
+          "properties": [
+            "title",
+            "description"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "TaskUpdate",
+          "methods": [],
+          "properties": [
+            "title",
+            "description",
+            "done"
+          ],
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "TaskOut",
+          "methods": [],
+          "properties": [
+            "id",
+            "title",
+            "description",
+            "done",
+            "created_at"
+          ],
+          "exported": true,
+          "lineCount": 9
+        }
+      ],
+      "imports": [
+        {
+          "source": "datetime",
+          "specifiers": [
+            "datetime"
+          ]
+        },
+        {
+          "source": "pydantic",
+          "specifiers": [
+            "BaseModel",
+            "EmailStr",
+            "Field"
+          ]
+        }
+      ],
+      "exports": [
+        "UserCreate",
+        "UserOut",
+        "LoginRequest",
+        "TokenResponse",
+        "TaskCreate",
+        "TaskUpdate",
+        "TaskOut"
+      ],
+      "totalLines": 61,
+      "hasStructuralAnalysis": true
+    },
+    "backend/requirements.txt": {
+      "filePath": "backend/requirements.txt",
+      "contentHash": "859af9587b289fd5034eb1dc82adcd4891a4e51ee25090d45d1a9e8f37d51b70",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 31,
+      "hasStructuralAnalysis": false
+    },
+    "backend/tests/__init__.py": {
+      "filePath": "backend/tests/__init__.py",
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "backend/tests/test_health.py": {
+      "filePath": "backend/tests/test_health.py",
+      "contentHash": "cb83022fd06de45a2cd57ff0eeb660ce8fb167ca80e95a99c7066ece5d1f9381",
+      "functions": [
+        {
+          "name": "test_healthz_returns_ok",
+          "params": [],
+          "returnType": "None",
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "test_register_then_login_flow",
+          "params": [],
+          "returnType": "None",
+          "exported": true,
+          "lineCount": 15
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "fastapi.testclient",
+          "specifiers": [
+            "TestClient"
+          ]
+        },
+        {
+          "source": "app.main",
+          "specifiers": [
+            "app"
+          ]
+        }
+      ],
+      "exports": [
+        "test_healthz_returns_ok",
+        "test_register_then_login_flow"
+      ],
+      "totalLines": 42,
+      "hasStructuralAnalysis": true
+    },
+    "docker-compose.yml": {
+      "filePath": "docker-compose.yml",
+      "contentHash": "22c20414a855c2ba74320523722d9809ffd3002e53b91fcc2dd4c342afe49244",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 71,
+      "hasStructuralAnalysis": true
+    },
+    "docs/00-introduction.md": {
+      "filePath": "docs/00-introduction.md",
+      "contentHash": "9aeb7f5d9502a8029b9a9e690a48e00e5b4fa53eb59bfd66691cce7580cfa5f5",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 190,
+      "hasStructuralAnalysis": true
+    },
+    "docs/01-project-overview.md": {
+      "filePath": "docs/01-project-overview.md",
+      "contentHash": "ed23be5d28d7abb6889f79a04dcbe368abcff7bb9372e1485692fa3e1879070f",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 189,
+      "hasStructuralAnalysis": true
+    },
+    "docs/02-local-development.md": {
+      "filePath": "docs/02-local-development.md",
+      "contentHash": "100d27b18572fa838f83e89816b15e671129cd1738137d9b46a4dbb88c694e12",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 259,
+      "hasStructuralAnalysis": true
+    },
+    "docs/03-docker-basics.md": {
+      "filePath": "docs/03-docker-basics.md",
+      "contentHash": "d1100838e6db84ef60acf710220f34c240d439787532aede88c3c0a3e484c687",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 238,
+      "hasStructuralAnalysis": true
+    },
+    "docs/04-gcp-introduction.md": {
+      "filePath": "docs/04-gcp-introduction.md",
+      "contentHash": "088ed88ef9c63503fcb1717a8c083bbb9ff7788d9399a25715357b1cf4f2aacb",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 230,
+      "hasStructuralAnalysis": true
+    },
+    "docs/05-vpc-networking.md": {
+      "filePath": "docs/05-vpc-networking.md",
+      "contentHash": "660de9743daa6c1498fe6bc9c5f96c7b66db16a1ec178929c26a477f3e8832a3",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 259,
+      "hasStructuralAnalysis": true
+    },
+    "docs/06-compute-engine-deployment.md": {
+      "filePath": "docs/06-compute-engine-deployment.md",
+      "contentHash": "c8d801760dc8cef104547f605d226f3e6eeb5f897d075eab5ac7ae6979455f14",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 251,
+      "hasStructuralAnalysis": true
+    },
+    "docs/07-database-setup.md": {
+      "filePath": "docs/07-database-setup.md",
+      "contentHash": "05226d906c794a11f3de9e3fde6ca9c5d0b64ffc42c53b16ddf329ed6f444d35",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 197,
+      "hasStructuralAnalysis": true
+    },
+    "docs/08-firewalls-and-security.md": {
+      "filePath": "docs/08-firewalls-and-security.md",
+      "contentHash": "65b93920eb4e65489cf6d401efbee8b3afd8462260611537dfa77819cfe24754",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 276,
+      "hasStructuralAnalysis": true
+    },
+    "docs/09-ci-cd-with-github-actions.md": {
+      "filePath": "docs/09-ci-cd-with-github-actions.md",
+      "contentHash": "6f1020e87141f9bfe374724230b48ede85eccf0b47a9e4d7295c0121adc118a0",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 376,
+      "hasStructuralAnalysis": true
+    },
+    "docs/10-monitoring-and-logging.md": {
+      "filePath": "docs/10-monitoring-and-logging.md",
+      "contentHash": "59fca3734e45318807f724d515bbfadf4dea779e95bd12f0de619ff07a83a93e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 195,
+      "hasStructuralAnalysis": true
+    },
+    "docs/11-troubleshooting.md": {
+      "filePath": "docs/11-troubleshooting.md",
+      "contentHash": "924e645361a214652fa49f2d1c22b7fcf7a4bc0c15e8ca9eeab0ee49818ee459",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 243,
+      "hasStructuralAnalysis": true
+    },
+    "docs/12-cleanup-and-cost-management.md": {
+      "filePath": "docs/12-cleanup-and-cost-management.md",
+      "contentHash": "cb24a4a8302284c52093931213f6c59058912f2b07da6fc34277936827e2f298",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 173,
+      "hasStructuralAnalysis": true
+    },
+    "docs/13-next-steps.md": {
+      "filePath": "docs/13-next-steps.md",
+      "contentHash": "b2af038883d92e7fdab0e39fc2248700b4764114ddb5e04995007a59f3c7842b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 159,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/.dockerignore": {
+      "filePath": "frontend/.dockerignore",
+      "contentHash": "04c459d617f3c9db2726f08fe48792c3b2c12b057653a8c099fe65b7120482e5",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 8,
+      "hasStructuralAnalysis": false
+    },
+    "frontend/Dockerfile": {
+      "filePath": "frontend/Dockerfile",
+      "contentHash": "a5eff1d133324e9513b9d45597a7afae7cc9b653df64eb7bd64d99ecd24003ea",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 46,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/index.html": {
+      "filePath": "frontend/index.html",
+      "contentHash": "7dc543199431165a48304113951d19d583bd6a622b1b6b08bf017cbc2642299d",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 13,
+      "hasStructuralAnalysis": false
+    },
+    "frontend/package.json": {
+      "filePath": "frontend/package.json",
+      "contentHash": "f910b713eb435eea5828f6c9663079be7f35805ed041e297404342eb1a07231c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 43,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/server.js": {
+      "filePath": "frontend/server.js",
+      "contentHash": "26f57ac5e959ed98a436e2edea36b11a3d74a594fa8469a2b064205ac428125d",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "express",
+          "specifiers": [
+            "express"
+          ]
+        },
+        {
+          "source": "morgan",
+          "specifiers": [
+            "morgan"
+          ]
+        },
+        {
+          "source": "http-proxy-middleware",
+          "specifiers": [
+            "createProxyMiddleware"
+          ]
+        },
+        {
+          "source": "node:path",
+          "specifiers": [
+            "path"
+          ]
+        },
+        {
+          "source": "node:url",
+          "specifiers": [
+            "fileURLToPath"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 58,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/App.jsx": {
+      "filePath": "frontend/src/App.jsx",
+      "contentHash": "35c971dcd7a498be93a2e3caa687ee47c9d8604ff371f902829e7dadfc350200",
+      "functions": [
+        {
+          "name": "App",
+          "params": [],
+          "exported": true,
+          "lineCount": 9
+        },
+        {
+          "name": "AuthScreen",
+          "params": [],
+          "exported": false,
+          "lineCount": 42
+        },
+        {
+          "name": "TaskScreen",
+          "params": [],
+          "exported": false,
+          "lineCount": 60
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "useEffect",
+            "useState"
+          ]
+        },
+        {
+          "source": "./api.js",
+          "specifiers": [
+            "api"
+          ]
+        }
+      ],
+      "exports": [
+        "App"
+      ],
+      "totalLines": 117,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/App.test.jsx": {
+      "filePath": "frontend/src/App.test.jsx",
+      "contentHash": "73eb7b91ebd05ac052e9e7253ea47aeb5a8c91c30778db61b8a4aebda4dea986",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "vitest",
+          "specifiers": [
+            "describe",
+            "it",
+            "expect"
+          ]
+        },
+        {
+          "source": "@testing-library/react",
+          "specifiers": [
+            "render",
+            "screen"
+          ]
+        },
+        {
+          "source": "./App.jsx",
+          "specifiers": [
+            "App"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 12,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/api.js": {
+      "filePath": "frontend/src/api.js",
+      "contentHash": "cf451632be29f53e6c866daaa90abd4459b5b789d794a70c66c0318251ab1df9",
+      "functions": [
+        {
+          "name": "authHeaders",
+          "params": [],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "request",
+          "params": [
+            "path"
+          ],
+          "exported": false,
+          "lineCount": 16
+        }
+      ],
+      "classes": [],
+      "imports": [],
+      "exports": [
+        "api"
+      ],
+      "totalLines": 45,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/main.jsx": {
+      "filePath": "frontend/src/main.jsx",
+      "contentHash": "7ccc757f4fc9e65ac19db10cf988455c5817e607f09d60711702b968e21a1928",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "React"
+          ]
+        },
+        {
+          "source": "react-dom/client",
+          "specifiers": [
+            "createRoot"
+          ]
+        },
+        {
+          "source": "./App.jsx",
+          "specifiers": [
+            "App"
+          ]
+        },
+        {
+          "source": "./styles.css",
+          "specifiers": []
+        }
+      ],
+      "exports": [],
+      "totalLines": 11,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/styles.css": {
+      "filePath": "frontend/src/styles.css",
+      "contentHash": "f0b2bf4c3f2ddeb4063d5812a905f43ed01871d0f31821022ccffb7464ef2de1",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 84,
+      "hasStructuralAnalysis": false
+    },
+    "frontend/vite.config.js": {
+      "filePath": "frontend/vite.config.js",
+      "contentHash": "45136af2ddc47289e99c05300baae7358130cab5f5271db883dddced94def711",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "vite",
+          "specifiers": [
+            "defineConfig"
+          ]
+        },
+        {
+          "source": "@vitejs/plugin-react",
+          "specifiers": [
+            "react"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 25,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/cleanup.sh": {
+      "filePath": "scripts/cleanup.sh",
+      "contentHash": "58dfa9570bf23841405cd6dac47096e8a7bedb54f8b9ca403bb805929adcdf00",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 51,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/startup-app.sh": {
+      "filePath": "scripts/startup-app.sh",
+      "contentHash": "8e71ccef4e0c06d978715cf6852c848288fa16acf1d2a0d4ae2c41ba835e8244",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 29,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/startup-db.sh": {
+      "filePath": "scripts/startup-db.sh",
+      "contentHash": "f7c4fe9615560de5cc801e4a3420326116d22664a1ffdb54f817e589ce55c6ed",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 53,
+      "hasStructuralAnalysis": true
+    }
+  }
+}

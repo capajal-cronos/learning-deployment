@@ -39,3 +39,11 @@ Thumbs.db
 !.vscode/extensions.json
 
 # architecture.png is intentionally tracked — export it from architecture.drawio.
+
+# --- Claude Code ---
+.claude/settings.local.json
+
+# --- Understand Anything ---
+.understand-anything/intermediate/
+.understand-anything/tmp/
+.understand-anything/diff-overlay.json

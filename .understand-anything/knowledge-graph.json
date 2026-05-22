@@ -1,0 +1,2580 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "learning-deployment",
+    "languages": [
+      "css",
+      "dockerfile",
+      "drawio",
+      "example",
+      "html",
+      "javascript",
+      "json",
+      "markdown",
+      "python",
+      "shell",
+      "txt",
+      "unknown",
+      "yaml"
+    ],
+    "frameworks": [
+      "Docker",
+      "Docker Compose",
+      "Express",
+      "FastAPI",
+      "GitHub Actions",
+      "Pydantic",
+      "React",
+      "SQLAlchemy",
+      "Uvicorn",
+      "Vite",
+      "Vitest",
+      "pytest"
+    ],
+    "description": "A guided learning project that teaches deploying a fullstack TaskBoard app to GCP with CI/CD.",
+    "analyzedAt": "2026-05-22T19:41:00.883Z",
+    "gitCommitHash": "fa02a0e1257ee14fc8b3a07e8652c80e3402126b"
+  },
+  "nodes": [
+    {
+      "id": "config:.env.example",
+      "type": "config",
+      "name": ".env.example",
+      "filePath": ".env.example",
+      "summary": "Template environment-variable file documenting the eight runtime settings (Postgres credentials, DATABASE_URL, JWT secret/expiry, backend URL, frontend port) consumed by docker-compose and the local dev stack.",
+      "tags": [
+        "configuration",
+        "environment",
+        "secrets-template",
+        "docker-compose"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Acts as the canonical contract between docker-compose interpolation (${VAR} syntax) and the FastAPI/Express runtimes; never contains real secrets."
+    },
+    {
+      "id": "pipeline:.github/workflows/ci-cd.yml",
+      "type": "pipeline",
+      "name": "ci-cd.yml",
+      "filePath": ".github/workflows/ci-cd.yml",
+      "summary": "Three-stage GitHub Actions workflow (test-backend/test-frontend → build-and-push → deploy) that lints and tests both services on every PR, then on push to main builds Docker images, pushes to GCP Artifact Registry, and SSHes into the app VM via IAP to roll the new images. Uses Workload Identity Federation rather than long-lived JSON keys.",
+      "tags": [
+        "ci-cd",
+        "deployment",
+        "github-actions",
+        "gcp",
+        "workload-identity-federation"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Models least-privilege auth: OIDC token → WIF → short-lived GCP access token; secrets fetched from Secret Manager at deploy time and forwarded into a heredoc-driven SSH session."
+    },
+    {
+      "id": "file:architecture.drawio",
+      "type": "file",
+      "name": "architecture.drawio",
+      "filePath": "architecture.drawio",
+      "summary": "draw.io architecture diagram visualizing the production TaskBoard topology: browser → internet → GCP firewall → VPC/subnet → app VM (frontend+backend containers) → internal-only DB VM, plus the parallel GitHub Actions → Artifact Registry → app VM CI/CD lane.",
+      "tags": [
+        "architecture-diagram",
+        "documentation",
+        "visual-reference"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:backend/.dockerignore",
+      "type": "file",
+      "name": ".dockerignore",
+      "filePath": "backend/.dockerignore",
+      "summary": "Excludes Python virtualenvs, caches, tests, and local DB artifacts from the backend Docker build context so the image stays small and reproducible.",
+      "tags": [
+        "docker",
+        "build-context",
+        "configuration"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:backend/Dockerfile",
+      "type": "service",
+      "name": "backend/Dockerfile",
+      "filePath": "backend/Dockerfile",
+      "summary": "Multi-stage build for the FastAPI backend: a `builder` stage on python:3.12-slim compiles wheels from requirements.txt, then a slim `runtime` stage installs them, copies the app, drops to a non-root `app` user, exposes 8000, adds a healthcheck, and runs uvicorn.",
+      "tags": [
+        "containerization",
+        "infrastructure",
+        "multi-stage-build",
+        "python",
+        "fastapi"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Separating wheel-building from runtime keeps the final image free of build toolchains; the non-root USER step and HEALTHCHECK are production hygiene that the tutorial highlights explicitly."
+    },
+    {
+      "id": "service:backend/Dockerfile:builder",
+      "type": "service",
+      "name": "builder",
+      "filePath": "backend/Dockerfile",
+      "lineRange": [
+        11,
+        25
+      ],
+      "summary": "Build stage that installs pip and compiles all backend Python dependencies into /wheels for later copy into the runtime stage.",
+      "tags": [
+        "docker-stage",
+        "build",
+        "python-wheels"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:backend/Dockerfile:runtime",
+      "type": "service",
+      "name": "runtime",
+      "filePath": "backend/Dockerfile",
+      "lineRange": [
+        26,
+        54
+      ],
+      "summary": "Slim runtime stage that installs pre-built wheels, copies the FastAPI app, runs as a non-root `app` user, exposes port 8000, and starts uvicorn with a healthcheck.",
+      "tags": [
+        "docker-stage",
+        "runtime",
+        "non-root",
+        "healthcheck"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "service:docker-compose.yml",
+      "type": "service",
+      "name": "docker-compose.yml",
+      "filePath": "docker-compose.yml",
+      "summary": "Local-development orchestration defining three services — Postgres 16 (`db`), the FastAPI `backend`, and the React/Express `frontend` — wired together on a private Docker network with a named `db-data` volume and a `service_healthy` gate before the backend starts.",
+      "tags": [
+        "orchestration",
+        "infrastructure",
+        "docker-compose",
+        "local-development"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Mirrors the deployed topology so learners reason about service-name DNS and healthcheck-based startup ordering locally before meeting GCP."
+    },
+    {
+      "id": "service:docker-compose.yml:db",
+      "type": "service",
+      "name": "db",
+      "filePath": "docker-compose.yml",
+      "summary": "PostgreSQL 16-alpine service bound to 127.0.0.1:5432 with a pg_isready healthcheck and a named volume for data persistence.",
+      "tags": [
+        "database",
+        "postgres",
+        "compose-service"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:docker-compose.yml:backend",
+      "type": "service",
+      "name": "backend",
+      "filePath": "docker-compose.yml",
+      "summary": "FastAPI backend service built from `./backend`; waits for the db healthcheck and exposes port 8000 to localhost only.",
+      "tags": [
+        "backend",
+        "fastapi",
+        "compose-service"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:docker-compose.yml:frontend",
+      "type": "service",
+      "name": "frontend",
+      "filePath": "docker-compose.yml",
+      "summary": "React + Express frontend built from `./frontend`; reaches the backend via internal Docker DNS and is the only service published on a non-localhost port (3000).",
+      "tags": [
+        "frontend",
+        "react",
+        "express",
+        "compose-service"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/.dockerignore",
+      "type": "file",
+      "name": ".dockerignore",
+      "filePath": "frontend/.dockerignore",
+      "summary": "Excludes node_modules, build output, and local env files from the frontend Docker build context to keep the image lean and reproducible.",
+      "tags": [
+        "docker",
+        "build-context",
+        "configuration"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:frontend/Dockerfile",
+      "type": "service",
+      "name": "frontend/Dockerfile",
+      "filePath": "frontend/Dockerfile",
+      "summary": "Multi-stage Node 20-alpine build for the frontend: a `builder` stage runs `npm ci` and `npm run build` to produce the Vite dist bundle, then a `runtime` stage installs production deps, copies the Express server plus dist, runs as a non-root `app` user, exposes 3000 with a healthcheck.",
+      "tags": [
+        "containerization",
+        "infrastructure",
+        "multi-stage-build",
+        "node",
+        "react"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Express serves the prebuilt Vite SPA in production rather than running a dev server; the production image therefore contains the built `dist/` but no toolchain."
+    },
+    {
+      "id": "service:frontend/Dockerfile:builder",
+      "type": "service",
+      "name": "builder",
+      "filePath": "frontend/Dockerfile",
+      "lineRange": [
+        11,
+        23
+      ],
+      "summary": "Build stage that installs Node dependencies and runs `npm run build` to produce the Vite production bundle in `/app/dist`.",
+      "tags": [
+        "docker-stage",
+        "build",
+        "vite",
+        "npm"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:frontend/Dockerfile:runtime",
+      "type": "service",
+      "name": "runtime",
+      "filePath": "frontend/Dockerfile",
+      "lineRange": [
+        24,
+        46
+      ],
+      "summary": "Slim runtime stage installing production-only dependencies, copying `server.js` and the built `dist/`, running as a non-root `app` user with a healthcheck on port 3000.",
+      "tags": [
+        "docker-stage",
+        "runtime",
+        "non-root",
+        "healthcheck"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "README.md",
+      "summary": "Top-level project README that frames the tutorial — what learners build (TaskBoard fullstack app on GCP), what they learn (Docker, VPC, Compute Engine, CI/CD, observability), how to navigate the 14 numbered chapters, prerequisites, and the repository layout.",
+      "tags": [
+        "documentation",
+        "entry-point",
+        "overview",
+        "tutorial"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/00-introduction.md",
+      "type": "document",
+      "name": "00-introduction.md",
+      "filePath": "docs/00-introduction.md",
+      "summary": "Opening chapter explaining why the tutorial exists, what learners will build and learn, the code → system → service mental model, and how each chapter is structured. Acts as the front door into the chapter sequence.",
+      "tags": [
+        "documentation",
+        "tutorial",
+        "introduction",
+        "onboarding"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/01-project-overview.md",
+      "type": "document",
+      "name": "01-project-overview.md",
+      "filePath": "docs/01-project-overview.md",
+      "summary": "Walks through the TaskBoard app end-to-end: the request path from browser to React frontend to FastAPI backend to Postgres, the folder layout, container vs host ports, the data model, the JWT auth flow, and where environment variables live.",
+      "tags": [
+        "documentation",
+        "tutorial",
+        "architecture",
+        "data-model"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/02-local-development.md",
+      "type": "document",
+      "name": "02-local-development.md",
+      "filePath": "docs/02-local-development.md",
+      "summary": "Local-dev chapter that walks learners through copying `.env.example`, running the full stack via docker compose (Path A) or natively with hot reload (Path B), inspecting logs, talking to Postgres, and recognizing common beginner mistakes.",
+      "tags": [
+        "documentation",
+        "tutorial",
+        "local-development",
+        "docker-compose"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/03-docker-basics.md",
+      "type": "document",
+      "name": "03-docker-basics.md",
+      "filePath": "docs/03-docker-basics.md",
+      "summary": "Conceptual primer on Docker: what problem it solves, the anatomy of a Dockerfile, build layers and caching, why .dockerignore matters, image vs container distinctions, multi-stage builds, and registries.",
+      "tags": [
+        "documentation",
+        "tutorial",
+        "docker",
+        "containerization"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/04-gcp-introduction.md",
+      "type": "document",
+      "name": "04-gcp-introduction.md",
+      "filePath": "docs/04-gcp-introduction.md",
+      "summary": "GCP onboarding chapter covering the project/billing/API mental map, regions and zones, installing the gcloud CLI, creating and linking a project, enabling required APIs, setting defaults, and the free tier.",
+      "tags": [
+        "documentation",
+        "tutorial",
+        "gcp",
+        "gcloud-cli"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/05-vpc-networking.md",
+      "type": "document",
+      "name": "05-vpc-networking.md",
+      "filePath": "docs/05-vpc-networking.md",
+      "summary": "Networking deep-dive that explains private networks, IPv4 basics, internal vs external IPs, regional subnets, routes, firewall rules as the real gate, and hands-on creation of `taskboard-vpc` and `app-subnet`.",
+      "tags": [
+        "documentation",
+        "tutorial",
+        "networking",
+        "vpc"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/06-compute-engine-deployment.md",
+      "type": "document",
+      "name": "06-compute-engine-deployment.md",
+      "filePath": "docs/06-compute-engine-deployment.md",
+      "summary": "Hands-on chapter that provisions two Compute Engine VMs (`taskboard-db` internal-only, `taskboard-app` public) with startup scripts, demonstrates SSH-via-IAP, and discusses why the workload is split across two VMs.",
+      "tags": [
+        "documentation",
+        "tutorial",
+        "compute-engine",
+        "deployment"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/07-database-setup.md",
+      "type": "document",
+      "name": "07-database-setup.md",
+      "filePath": "docs/07-database-setup.md",
+      "summary": "Database chapter that installs Postgres on the DB VM, explains why it binds to all interfaces, contrasts self-managed Postgres on GCE with Cloud SQL, verifies connectivity from the app VM, and outlines backup and schema-reset workflows.",
+      "tags": [
+        "documentation",
+        "tutorial",
+        "database",
+        "postgres"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/08-firewalls-and-security.md",
+      "type": "document",
+      "name": "08-firewalls-and-security.md",
+      "filePath": "docs/08-firewalls-and-security.md",
+      "summary": "Security chapter covering defense-in-depth, the three concrete firewall rules (SSH via IAP, public HTTP/HTTPS, internal DB), IAM least-privilege grants for CI/CD, Secret Manager storage for JWT/DB credentials, HTTPS strategy, and a hardening checklist.",
+      "tags": [
+        "documentation",
+        "tutorial",
+        "security",
+        "firewall",
+        "iam"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/09-ci-cd-with-github-actions.md",
+      "type": "document",
+      "name": "09-ci-cd-with-github-actions.md",
+      "filePath": "docs/09-ci-cd-with-github-actions.md",
+      "summary": "Most detailed chapter: walks through the GitHub Actions workflow file top-to-bottom, explains Workload Identity Federation setup, Artifact Registry, the SSH-via-IAP deploy job, secrets management across three locations, rollback strategy, and required GitHub secrets.",
+      "tags": [
+        "documentation",
+        "tutorial",
+        "ci-cd",
+        "github-actions",
+        "wif"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/10-monitoring-and-logging.md",
+      "type": "document",
+      "name": "10-monitoring-and-logging.md",
+      "filePath": "docs/10-monitoring-and-logging.md",
+      "summary": "Observability chapter explaining where logs flow on the VMs, the case for structured logging, the metrics that actually matter, setting up uptime checks, reading real error traces, audit logs, and cost monitoring.",
+      "tags": [
+        "documentation",
+        "tutorial",
+        "monitoring",
+        "logging",
+        "observability"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/11-troubleshooting.md",
+      "type": "document",
+      "name": "11-troubleshooting.md",
+      "filePath": "docs/11-troubleshooting.md",
+      "summary": "Troubleshooting reference grouping common failure modes by category — local dev, Docker, gcloud/GCP, networking, CI/CD, and application bugs — with concrete diagnostic commands for each.",
+      "tags": [
+        "documentation",
+        "tutorial",
+        "troubleshooting",
+        "reference"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/12-cleanup-and-cost-management.md",
+      "type": "document",
+      "name": "12-cleanup-and-cost-management.md",
+      "filePath": "docs/12-cleanup-and-cost-management.md",
+      "summary": "Teaches learners how to identify cost drivers, soft-stop vs hard-delete resources, run the full cleanup script, deep-clean identities and secrets, close the project, and form lasting cost habits.",
+      "tags": [
+        "documentation",
+        "tutorial",
+        "cleanup",
+        "cost-management"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/13-next-steps.md",
+      "type": "document",
+      "name": "13-next-steps.md",
+      "filePath": "docs/13-next-steps.md",
+      "summary": "Closing chapter recapping what was learned and pointing at production-grade upgrades (HTTPS, Cloud SQL, real migrations, blue/green, IaC, GKE) plus suggested next projects and career-shaped reading.",
+      "tags": [
+        "documentation",
+        "tutorial",
+        "next-steps",
+        "recap"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/cleanup.sh",
+      "type": "file",
+      "name": "cleanup.sh",
+      "filePath": "scripts/cleanup.sh",
+      "summary": "Interactive bash teardown script that prompts for confirmation, then deletes the tutorial's Compute Engine VMs, three custom firewall rules, the subnet, the VPC, and the Artifact Registry repo — with commented-out lines to optionally remove secrets and identities.",
+      "tags": [
+        "script",
+        "cleanup",
+        "gcp",
+        "cost-management",
+        "shell"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Uses `set -uo pipefail` (deliberately not -e) plus `|| true` on each delete so a missing resource doesn't abort the chain — appropriate for an idempotent teardown."
+    },
+    {
+      "id": "file:scripts/startup-app.sh",
+      "type": "file",
+      "name": "startup-app.sh",
+      "filePath": "scripts/startup-app.sh",
+      "summary": "GCE VM startup script that installs Docker and configures Artifact Registry auth so the CI/CD pipeline can pull and run the app image.",
+      "tags": [
+        "script",
+        "infrastructure",
+        "deployment",
+        "docker",
+        "vm-startup"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Uses `set -euo pipefail` for strict error handling; relies on instance metadata for region resolution."
+    },
+    {
+      "id": "file:scripts/startup-db.sh",
+      "type": "file",
+      "name": "startup-db.sh",
+      "filePath": "scripts/startup-db.sh",
+      "summary": "GCE VM startup script that installs PostgreSQL 16, binds it to the VPC interface, restricts pg_hba.conf to the 10.10.0.0/24 subnet, and provisions the taskboard role and database from instance metadata.",
+      "tags": [
+        "script",
+        "infrastructure",
+        "database",
+        "postgresql",
+        "vm-startup"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Reads DB password from GCP instance metadata via the metadata.google.internal endpoint."
+    },
+    {
+      "id": "file:backend/app/__init__.py",
+      "type": "file",
+      "name": "__init__.py",
+      "filePath": "backend/app/__init__.py",
+      "summary": "Empty package marker that declares `backend/app` as the importable FastAPI application package.",
+      "tags": [
+        "package-marker",
+        "entry-point",
+        "python-package"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:backend/app/auth.py",
+      "type": "file",
+      "name": "auth.py",
+      "filePath": "backend/app/auth.py",
+      "summary": "Authentication primitives: bcrypt password hashing, JWT issuance, and a FastAPI dependency that resolves the current user from a Bearer token.",
+      "tags": [
+        "authentication",
+        "jwt",
+        "security",
+        "fastapi-dependency"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:backend/app/config.py",
+      "type": "file",
+      "name": "config.py",
+      "filePath": "backend/app/config.py",
+      "summary": "Pydantic Settings class loading the database URL, JWT secret/algorithm/expiry, and CORS origins from environment variables, with an lru_cached accessor.",
+      "tags": [
+        "configuration",
+        "pydantic-settings",
+        "env-loader"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:backend/app/database.py",
+      "type": "file",
+      "name": "database.py",
+      "filePath": "backend/app/database.py",
+      "summary": "SQLAlchemy engine, session factory, declarative Base, and the `get_db` FastAPI dependency that yields per-request sessions and closes them on teardown.",
+      "tags": [
+        "database",
+        "sqlalchemy",
+        "session-management",
+        "fastapi-dependency"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:backend/app/main.py",
+      "type": "file",
+      "name": "main.py",
+      "filePath": "backend/app/main.py",
+      "summary": "FastAPI application entry point: wires CORS middleware, registers the auth and task routers, exposes /healthz, and auto-creates tables on startup.",
+      "tags": [
+        "entry-point",
+        "fastapi",
+        "api-handler",
+        "bootstrap",
+        "tested"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:backend/app/models.py",
+      "type": "file",
+      "name": "models.py",
+      "filePath": "backend/app/models.py",
+      "summary": "SQLAlchemy ORM models for User and Task with a one-to-many ownership relationship and server-side default timestamps.",
+      "tags": [
+        "data-model",
+        "sqlalchemy",
+        "orm"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:backend/app/routers/__init__.py",
+      "type": "file",
+      "name": "__init__.py",
+      "filePath": "backend/app/routers/__init__.py",
+      "summary": "Empty package marker that declares `backend/app/routers` as a Python sub-package containing FastAPI routers.",
+      "tags": [
+        "package-marker",
+        "barrel",
+        "python-package"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:backend/app/routers/auth_routes.py",
+      "type": "file",
+      "name": "auth_routes.py",
+      "filePath": "backend/app/routers/auth_routes.py",
+      "summary": "FastAPI router exposing /auth/register and /auth/login endpoints that create users with hashed passwords and issue JWT access tokens.",
+      "tags": [
+        "api-handler",
+        "authentication",
+        "fastapi-router",
+        "tested"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:backend/app/routers/task_routes.py",
+      "type": "file",
+      "name": "task_routes.py",
+      "filePath": "backend/app/routers/task_routes.py",
+      "summary": "FastAPI router providing authenticated CRUD endpoints for tasks, scoped to the current user via the get_current_user dependency.",
+      "tags": [
+        "api-handler",
+        "crud",
+        "fastapi-router",
+        "authorization"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:backend/app/schemas.py",
+      "type": "file",
+      "name": "schemas.py",
+      "filePath": "backend/app/schemas.py",
+      "summary": "Pydantic request and response schemas for user registration, login, JWT tokens, and task create/update/output payloads.",
+      "tags": [
+        "type-definition",
+        "validation",
+        "pydantic",
+        "schema"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:backend/requirements.txt",
+      "type": "document",
+      "name": "requirements.txt",
+      "filePath": "backend/requirements.txt",
+      "summary": "Python dependency manifest pinning FastAPI, SQLAlchemy, psycopg, passlib, python-jose, and pytest for the backend service.",
+      "tags": [
+        "dependencies",
+        "python",
+        "requirements",
+        "build-system"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:backend/tests/__init__.py",
+      "type": "file",
+      "name": "__init__.py",
+      "filePath": "backend/tests/__init__.py",
+      "summary": "Empty package marker that lets pytest discover the backend test package.",
+      "tags": [
+        "package-marker",
+        "test",
+        "python-package"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:backend/tests/test_health.py",
+      "type": "file",
+      "name": "test_health.py",
+      "filePath": "backend/tests/test_health.py",
+      "summary": "Integration tests using FastAPI TestClient covering the /healthz probe and the full register-login-list-tasks flow against an in-memory SQLite database.",
+      "tags": [
+        "test",
+        "integration-test",
+        "pytest",
+        "fastapi"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/index.html",
+      "type": "file",
+      "name": "index.html",
+      "filePath": "frontend/index.html",
+      "summary": "Vite HTML entry document with the React root div and a module script tag pointing to /src/main.jsx.",
+      "tags": [
+        "entry-point",
+        "html",
+        "vite",
+        "spa-shell"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:frontend/package.json",
+      "type": "config",
+      "name": "package.json",
+      "filePath": "frontend/package.json",
+      "summary": "Frontend package manifest declaring React 18, Vite, Express proxy server, and Vitest scripts for dev/build/start/test.",
+      "tags": [
+        "configuration",
+        "npm",
+        "build-system",
+        "dependencies"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/server.js",
+      "type": "file",
+      "name": "server.js",
+      "filePath": "frontend/server.js",
+      "summary": "Production Express server that serves the Vite build output and reverse-proxies /api/* to the FastAPI backend so the browser sees a single origin.",
+      "tags": [
+        "entry-point",
+        "express",
+        "proxy",
+        "static-server"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "ESM module using http-proxy-middleware; reads PORT and BACKEND_URL from env."
+    },
+    {
+      "id": "file:frontend/src/api.js",
+      "type": "file",
+      "name": "api.js",
+      "filePath": "frontend/src/api.js",
+      "summary": "Thin fetch wrapper that injects the Bearer token from localStorage and exposes a typed-ish `api` object for register, login, and task CRUD calls.",
+      "tags": [
+        "api-client",
+        "fetch",
+        "utility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/src/App.jsx",
+      "type": "file",
+      "name": "App.jsx",
+      "filePath": "frontend/src/App.jsx",
+      "summary": "Root React component that gates between an AuthScreen (login/register) and a TaskScreen (CRUD task board), persisting the JWT in localStorage.",
+      "tags": [
+        "component",
+        "entry-point",
+        "react",
+        "state-management",
+        "tested"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:frontend/src/App.test.jsx",
+      "type": "file",
+      "name": "App.test.jsx",
+      "filePath": "frontend/src/App.test.jsx",
+      "summary": "Vitest smoke test that renders the App component and asserts the auth screen heading is visible.",
+      "tags": [
+        "test",
+        "unit-test",
+        "vitest",
+        "react"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/src/main.jsx",
+      "type": "file",
+      "name": "main.jsx",
+      "filePath": "frontend/src/main.jsx",
+      "summary": "Vite/React bootstrap that mounts the App component into #root via createRoot and imports the global stylesheet.",
+      "tags": [
+        "entry-point",
+        "react",
+        "bootstrap"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/src/styles.css",
+      "type": "file",
+      "name": "styles.css",
+      "filePath": "frontend/src/styles.css",
+      "summary": "Global stylesheet defining the dark-themed TaskBoard layout: typography, form controls, task list rows, and button states.",
+      "tags": [
+        "styles",
+        "css",
+        "ui",
+        "theming"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:frontend/vite.config.js",
+      "type": "file",
+      "name": "vite.config.js",
+      "filePath": "frontend/vite.config.js",
+      "summary": "Vite configuration enabling the React plugin, exposing the dev server on 0.0.0.0:5173, and configuring Vitest with jsdom + a setup file.",
+      "tags": [
+        "configuration",
+        "vite",
+        "build-system",
+        "test-config"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:backend/app/auth.py:hash_password",
+      "type": "function",
+      "name": "hash_password",
+      "filePath": "backend/app/auth.py",
+      "lineRange": [
+        27,
+        28
+      ],
+      "summary": "Hashes a plaintext password using the configured passlib bcrypt context.",
+      "tags": [
+        "security",
+        "password-hashing",
+        "bcrypt"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:backend/app/auth.py:verify_password",
+      "type": "function",
+      "name": "verify_password",
+      "filePath": "backend/app/auth.py",
+      "lineRange": [
+        31,
+        32
+      ],
+      "summary": "Verifies a plaintext password against a bcrypt hash using the passlib context.",
+      "tags": [
+        "security",
+        "password-verification",
+        "bcrypt"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:backend/app/auth.py:create_access_token",
+      "type": "function",
+      "name": "create_access_token",
+      "filePath": "backend/app/auth.py",
+      "lineRange": [
+        35,
+        43
+      ],
+      "summary": "Builds and signs a JWT access token with sub/iat/exp claims using the configured secret, algorithm, and expiry.",
+      "tags": [
+        "jwt",
+        "token-issuance",
+        "security"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:backend/app/auth.py:get_current_user",
+      "type": "function",
+      "name": "get_current_user",
+      "filePath": "backend/app/auth.py",
+      "lineRange": [
+        46,
+        67
+      ],
+      "summary": "FastAPI dependency that extracts and validates the Bearer JWT from the Authorization header and returns the matching User from the database.",
+      "tags": [
+        "authentication",
+        "fastapi-dependency",
+        "jwt-validation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:backend/app/config.py:Settings",
+      "type": "class",
+      "name": "Settings",
+      "filePath": "backend/app/config.py",
+      "lineRange": [
+        18,
+        31
+      ],
+      "summary": "Pydantic BaseSettings subclass mapping environment variables to typed configuration fields for DB URL, JWT, and CORS.",
+      "tags": [
+        "configuration",
+        "pydantic-settings",
+        "data-model"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:backend/app/config.py:get_settings",
+      "type": "function",
+      "name": "get_settings",
+      "filePath": "backend/app/config.py",
+      "lineRange": [
+        35,
+        37
+      ],
+      "summary": "Returns an lru_cached Settings instance so configuration is parsed from environment only once per process.",
+      "tags": [
+        "configuration",
+        "factory",
+        "caching"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:backend/app/database.py:get_db",
+      "type": "function",
+      "name": "get_db",
+      "filePath": "backend/app/database.py",
+      "lineRange": [
+        35,
+        45
+      ],
+      "summary": "Generator-style FastAPI dependency that yields a SQLAlchemy session and guarantees `db.close()` on teardown.",
+      "tags": [
+        "database",
+        "fastapi-dependency",
+        "session-management"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:backend/app/database.py:Base",
+      "type": "class",
+      "name": "Base",
+      "filePath": "backend/app/database.py",
+      "lineRange": [
+        31,
+        32
+      ],
+      "summary": "SQLAlchemy declarative base class that all ORM models inherit from.",
+      "tags": [
+        "data-model",
+        "sqlalchemy",
+        "base-class"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:backend/app/main.py:on_startup",
+      "type": "function",
+      "name": "on_startup",
+      "filePath": "backend/app/main.py",
+      "lineRange": [
+        34,
+        42
+      ],
+      "summary": "FastAPI startup hook that calls Base.metadata.create_all so tables exist before the first request.",
+      "tags": [
+        "lifecycle",
+        "bootstrap",
+        "fastapi"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:backend/app/main.py:healthz",
+      "type": "function",
+      "name": "healthz",
+      "filePath": "backend/app/main.py",
+      "lineRange": [
+        46,
+        48
+      ],
+      "summary": "Liveness probe endpoint returning {status: ok} for load balancers and CI smoke tests.",
+      "tags": [
+        "api-handler",
+        "health-check",
+        "monitoring"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:backend/app/models.py:User",
+      "type": "class",
+      "name": "User",
+      "filePath": "backend/app/models.py",
+      "lineRange": [
+        17,
+        26
+      ],
+      "summary": "User ORM model with id, unique email, bcrypt password hash, timestamp, and a back-reference to owned tasks.",
+      "tags": [
+        "data-model",
+        "sqlalchemy",
+        "user"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:backend/app/models.py:Task",
+      "type": "class",
+      "name": "Task",
+      "filePath": "backend/app/models.py",
+      "lineRange": [
+        29,
+        39
+      ],
+      "summary": "Task ORM model with title, optional description, done flag, created_at, and a foreign-key relationship back to its owning User.",
+      "tags": [
+        "data-model",
+        "sqlalchemy",
+        "task"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:backend/app/routers/auth_routes.py:register",
+      "type": "function",
+      "name": "register",
+      "filePath": "backend/app/routers/auth_routes.py",
+      "lineRange": [
+        15,
+        24
+      ],
+      "summary": "POST /auth/register endpoint that checks for email uniqueness, hashes the password, and persists a new User.",
+      "tags": [
+        "api-handler",
+        "registration",
+        "authentication"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:backend/app/routers/auth_routes.py:login",
+      "type": "function",
+      "name": "login",
+      "filePath": "backend/app/routers/auth_routes.py",
+      "lineRange": [
+        28,
+        34
+      ],
+      "summary": "POST /auth/login endpoint that verifies credentials and returns a signed JWT access token, raising 401 on mismatch.",
+      "tags": [
+        "api-handler",
+        "login",
+        "jwt"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:backend/app/routers/task_routes.py:list_tasks",
+      "type": "function",
+      "name": "list_tasks",
+      "filePath": "backend/app/routers/task_routes.py",
+      "lineRange": [
+        15,
+        19
+      ],
+      "summary": "GET /tasks endpoint returning all tasks owned by the authenticated user in descending id order.",
+      "tags": [
+        "api-handler",
+        "crud",
+        "read"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:backend/app/routers/task_routes.py:create_task",
+      "type": "function",
+      "name": "create_task",
+      "filePath": "backend/app/routers/task_routes.py",
+      "lineRange": [
+        23,
+        32
+      ],
+      "summary": "POST /tasks endpoint that creates a new task owned by the current user from a validated TaskCreate payload.",
+      "tags": [
+        "api-handler",
+        "crud",
+        "create"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:backend/app/routers/task_routes.py:update_task",
+      "type": "function",
+      "name": "update_task",
+      "filePath": "backend/app/routers/task_routes.py",
+      "lineRange": [
+        36,
+        56
+      ],
+      "summary": "PATCH /tasks/{task_id} endpoint that partially updates a task after verifying ownership; returns 404 otherwise.",
+      "tags": [
+        "api-handler",
+        "crud",
+        "update",
+        "authorization"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:backend/app/routers/task_routes.py:delete_task",
+      "type": "function",
+      "name": "delete_task",
+      "filePath": "backend/app/routers/task_routes.py",
+      "lineRange": [
+        60,
+        70
+      ],
+      "summary": "DELETE /tasks/{task_id} endpoint that removes a task after confirming the requesting user owns it.",
+      "tags": [
+        "api-handler",
+        "crud",
+        "delete",
+        "authorization"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:backend/app/schemas.py:UserCreate",
+      "type": "class",
+      "name": "UserCreate",
+      "filePath": "backend/app/schemas.py",
+      "lineRange": [
+        15,
+        17
+      ],
+      "summary": "Pydantic request body for user registration with EmailStr and a min-length password.",
+      "tags": [
+        "schema",
+        "validation",
+        "request-body"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:backend/app/schemas.py:UserOut",
+      "type": "class",
+      "name": "UserOut",
+      "filePath": "backend/app/schemas.py",
+      "lineRange": [
+        20,
+        26
+      ],
+      "summary": "Pydantic response model exposing the user's id, email, and creation timestamp.",
+      "tags": [
+        "schema",
+        "response-model"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:backend/app/schemas.py:LoginRequest",
+      "type": "class",
+      "name": "LoginRequest",
+      "filePath": "backend/app/schemas.py",
+      "lineRange": [
+        29,
+        31
+      ],
+      "summary": "Pydantic request body for login containing email and password fields.",
+      "tags": [
+        "schema",
+        "validation",
+        "request-body"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:backend/app/schemas.py:TokenResponse",
+      "type": "class",
+      "name": "TokenResponse",
+      "filePath": "backend/app/schemas.py",
+      "lineRange": [
+        34,
+        36
+      ],
+      "summary": "Pydantic response model returning the JWT access token and its bearer token type.",
+      "tags": [
+        "schema",
+        "response-model",
+        "jwt"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:backend/app/schemas.py:TaskCreate",
+      "type": "class",
+      "name": "TaskCreate",
+      "filePath": "backend/app/schemas.py",
+      "lineRange": [
+        41,
+        43
+      ],
+      "summary": "Pydantic request body for creating a task with a required title and optional description.",
+      "tags": [
+        "schema",
+        "validation",
+        "request-body"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:backend/app/schemas.py:TaskUpdate",
+      "type": "class",
+      "name": "TaskUpdate",
+      "filePath": "backend/app/schemas.py",
+      "lineRange": [
+        46,
+        49
+      ],
+      "summary": "Pydantic request body for partial task updates with optional title, description, and done flag.",
+      "tags": [
+        "schema",
+        "validation",
+        "request-body"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:backend/app/schemas.py:TaskOut",
+      "type": "class",
+      "name": "TaskOut",
+      "filePath": "backend/app/schemas.py",
+      "lineRange": [
+        52,
+        60
+      ],
+      "summary": "Pydantic response model exposing a task's id, title, description, done flag, and created_at timestamp.",
+      "tags": [
+        "schema",
+        "response-model"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:backend/tests/test_health.py:test_healthz_returns_ok",
+      "type": "function",
+      "name": "test_healthz_returns_ok",
+      "filePath": "backend/tests/test_health.py",
+      "lineRange": [
+        21,
+        24
+      ],
+      "summary": "Asserts the /healthz endpoint returns HTTP 200 with the expected status payload.",
+      "tags": [
+        "test",
+        "smoke-test",
+        "health-check"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:backend/tests/test_health.py:test_register_then_login_flow",
+      "type": "function",
+      "name": "test_register_then_login_flow",
+      "filePath": "backend/tests/test_health.py",
+      "lineRange": [
+        27,
+        41
+      ],
+      "summary": "End-to-end flow test that registers a user, logs in, and lists tasks using the returned JWT against an in-memory SQLite database.",
+      "tags": [
+        "test",
+        "integration-test",
+        "auth-flow"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/src/api.js:request",
+      "type": "function",
+      "name": "request",
+      "filePath": "frontend/src/api.js",
+      "lineRange": [
+        14,
+        29
+      ],
+      "summary": "Generic fetch helper that injects auth headers, serializes JSON bodies, and throws an Error with the parsed message when the response is not ok.",
+      "tags": [
+        "api-client",
+        "fetch",
+        "utility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/src/App.jsx:App",
+      "type": "function",
+      "name": "App",
+      "filePath": "frontend/src/App.jsx",
+      "lineRange": [
+        4,
+        12
+      ],
+      "summary": "Root component managing the auth token in state + localStorage and delegating to AuthScreen or TaskScreen based on login state.",
+      "tags": [
+        "component",
+        "react",
+        "state-management"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:frontend/src/App.jsx:AuthScreen",
+      "type": "function",
+      "name": "AuthScreen",
+      "filePath": "frontend/src/App.jsx",
+      "lineRange": [
+        14,
+        55
+      ],
+      "summary": "Login/register form component that toggles between modes, calls api.register or api.login, and surfaces errors inline.",
+      "tags": [
+        "component",
+        "react",
+        "form",
+        "authentication"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:frontend/src/App.jsx:TaskScreen",
+      "type": "function",
+      "name": "TaskScreen",
+      "filePath": "frontend/src/App.jsx",
+      "lineRange": [
+        57,
+        116
+      ],
+      "summary": "Task board UI component that fetches tasks on mount and supports add, toggle, and delete operations against the API.",
+      "tags": [
+        "component",
+        "react",
+        "crud",
+        "task-board"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "config:.env.example",
+      "target": "service:docker-compose.yml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:docker-compose.yml",
+      "target": "service:docker-compose.yml:db",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:docker-compose.yml",
+      "target": "service:docker-compose.yml:backend",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:docker-compose.yml",
+      "target": "service:docker-compose.yml:frontend",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:docker-compose.yml:backend",
+      "target": "service:docker-compose.yml:db",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:docker-compose.yml:frontend",
+      "target": "service:docker-compose.yml:backend",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:docker-compose.yml:backend",
+      "target": "service:backend/Dockerfile",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:docker-compose.yml:frontend",
+      "target": "service:frontend/Dockerfile",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:backend/Dockerfile",
+      "target": "service:backend/Dockerfile:builder",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:backend/Dockerfile",
+      "target": "service:backend/Dockerfile:runtime",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:backend/Dockerfile:runtime",
+      "target": "service:backend/Dockerfile:builder",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:frontend/Dockerfile",
+      "target": "service:frontend/Dockerfile:builder",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:frontend/Dockerfile",
+      "target": "service:frontend/Dockerfile:runtime",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:frontend/Dockerfile:runtime",
+      "target": "service:frontend/Dockerfile:builder",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/.dockerignore",
+      "target": "service:backend/Dockerfile",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:frontend/.dockerignore",
+      "target": "service:frontend/Dockerfile",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/ci-cd.yml",
+      "target": "service:backend/Dockerfile",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/ci-cd.yml",
+      "target": "service:frontend/Dockerfile",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "pipeline:.github/workflows/ci-cd.yml",
+      "target": "service:docker-compose.yml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "document:README.md",
+      "target": "document:docs/00-introduction.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "service:docker-compose.yml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "file:architecture.drawio",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/00-introduction.md",
+      "target": "document:docs/01-project-overview.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/01-project-overview.md",
+      "target": "document:docs/02-local-development.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/02-local-development.md",
+      "target": "document:docs/03-docker-basics.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/03-docker-basics.md",
+      "target": "document:docs/04-gcp-introduction.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/04-gcp-introduction.md",
+      "target": "document:docs/05-vpc-networking.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/05-vpc-networking.md",
+      "target": "document:docs/06-compute-engine-deployment.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/06-compute-engine-deployment.md",
+      "target": "document:docs/07-database-setup.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/07-database-setup.md",
+      "target": "document:docs/08-firewalls-and-security.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/08-firewalls-and-security.md",
+      "target": "document:docs/09-ci-cd-with-github-actions.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/09-ci-cd-with-github-actions.md",
+      "target": "document:docs/10-monitoring-and-logging.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/10-monitoring-and-logging.md",
+      "target": "document:docs/11-troubleshooting.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/11-troubleshooting.md",
+      "target": "document:docs/12-cleanup-and-cost-management.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/12-cleanup-and-cost-management.md",
+      "target": "document:docs/13-next-steps.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/02-local-development.md",
+      "target": "service:docker-compose.yml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/02-local-development.md",
+      "target": "config:.env.example",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/03-docker-basics.md",
+      "target": "service:backend/Dockerfile",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/03-docker-basics.md",
+      "target": "service:frontend/Dockerfile",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/09-ci-cd-with-github-actions.md",
+      "target": "pipeline:.github/workflows/ci-cd.yml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/12-cleanup-and-cost-management.md",
+      "target": "file:scripts/cleanup.sh",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/01-project-overview.md",
+      "target": "file:architecture.drawio",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/app/auth.py",
+      "target": "file:backend/app/config.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/auth.py",
+      "target": "file:backend/app/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/auth.py",
+      "target": "file:backend/app/models.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/database.py",
+      "target": "file:backend/app/config.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/main.py",
+      "target": "file:backend/app/config.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/main.py",
+      "target": "file:backend/app/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/main.py",
+      "target": "file:backend/app/routers/__init__.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/main.py",
+      "target": "file:backend/app/routers/auth_routes.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/main.py",
+      "target": "file:backend/app/routers/task_routes.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/models.py",
+      "target": "file:backend/app/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/routers/auth_routes.py",
+      "target": "file:backend/app/auth.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/routers/auth_routes.py",
+      "target": "file:backend/app/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/routers/auth_routes.py",
+      "target": "file:backend/app/models.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/routers/auth_routes.py",
+      "target": "file:backend/app/schemas.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/routers/task_routes.py",
+      "target": "file:backend/app/auth.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/routers/task_routes.py",
+      "target": "file:backend/app/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/routers/task_routes.py",
+      "target": "file:backend/app/models.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/routers/task_routes.py",
+      "target": "file:backend/app/schemas.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/src/App.jsx",
+      "target": "file:frontend/src/api.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/src/App.test.jsx",
+      "target": "file:frontend/src/App.jsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/src/main.jsx",
+      "target": "file:frontend/src/App.jsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:frontend/src/main.jsx",
+      "target": "file:frontend/src/styles.css",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/app/auth.py",
+      "target": "function:backend/app/auth.py:hash_password",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/auth.py",
+      "target": "function:backend/app/auth.py:verify_password",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/auth.py",
+      "target": "function:backend/app/auth.py:create_access_token",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/auth.py",
+      "target": "function:backend/app/auth.py:get_current_user",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/auth.py",
+      "target": "function:backend/app/auth.py:hash_password",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/auth.py",
+      "target": "function:backend/app/auth.py:verify_password",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/auth.py",
+      "target": "function:backend/app/auth.py:create_access_token",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/auth.py",
+      "target": "function:backend/app/auth.py:get_current_user",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/config.py",
+      "target": "class:backend/app/config.py:Settings",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/config.py",
+      "target": "function:backend/app/config.py:get_settings",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/config.py",
+      "target": "class:backend/app/config.py:Settings",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/config.py",
+      "target": "function:backend/app/config.py:get_settings",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/database.py",
+      "target": "class:backend/app/database.py:Base",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/database.py",
+      "target": "function:backend/app/database.py:get_db",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/database.py",
+      "target": "class:backend/app/database.py:Base",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/database.py",
+      "target": "function:backend/app/database.py:get_db",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/main.py",
+      "target": "function:backend/app/main.py:on_startup",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/main.py",
+      "target": "function:backend/app/main.py:healthz",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/models.py",
+      "target": "class:backend/app/models.py:User",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/models.py",
+      "target": "class:backend/app/models.py:Task",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/models.py",
+      "target": "class:backend/app/models.py:User",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/models.py",
+      "target": "class:backend/app/models.py:Task",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/routers/auth_routes.py",
+      "target": "function:backend/app/routers/auth_routes.py:register",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/routers/auth_routes.py",
+      "target": "function:backend/app/routers/auth_routes.py:login",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/routers/auth_routes.py",
+      "target": "function:backend/app/routers/auth_routes.py:register",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/routers/auth_routes.py",
+      "target": "function:backend/app/routers/auth_routes.py:login",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/routers/task_routes.py",
+      "target": "function:backend/app/routers/task_routes.py:list_tasks",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/routers/task_routes.py",
+      "target": "function:backend/app/routers/task_routes.py:create_task",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/routers/task_routes.py",
+      "target": "function:backend/app/routers/task_routes.py:update_task",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/routers/task_routes.py",
+      "target": "function:backend/app/routers/task_routes.py:delete_task",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/routers/task_routes.py",
+      "target": "function:backend/app/routers/task_routes.py:list_tasks",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/routers/task_routes.py",
+      "target": "function:backend/app/routers/task_routes.py:create_task",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/routers/task_routes.py",
+      "target": "function:backend/app/routers/task_routes.py:update_task",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/routers/task_routes.py",
+      "target": "function:backend/app/routers/task_routes.py:delete_task",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/schemas.py",
+      "target": "class:backend/app/schemas.py:UserCreate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/schemas.py",
+      "target": "class:backend/app/schemas.py:UserOut",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/schemas.py",
+      "target": "class:backend/app/schemas.py:LoginRequest",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/schemas.py",
+      "target": "class:backend/app/schemas.py:TokenResponse",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/schemas.py",
+      "target": "class:backend/app/schemas.py:TaskCreate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/schemas.py",
+      "target": "class:backend/app/schemas.py:TaskUpdate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/schemas.py",
+      "target": "class:backend/app/schemas.py:TaskOut",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/app/schemas.py",
+      "target": "class:backend/app/schemas.py:UserCreate",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/schemas.py",
+      "target": "class:backend/app/schemas.py:UserOut",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/schemas.py",
+      "target": "class:backend/app/schemas.py:LoginRequest",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/schemas.py",
+      "target": "class:backend/app/schemas.py:TokenResponse",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/schemas.py",
+      "target": "class:backend/app/schemas.py:TaskCreate",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/schemas.py",
+      "target": "class:backend/app/schemas.py:TaskUpdate",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/schemas.py",
+      "target": "class:backend/app/schemas.py:TaskOut",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/tests/test_health.py",
+      "target": "function:backend/tests/test_health.py:test_healthz_returns_ok",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:backend/tests/test_health.py",
+      "target": "function:backend/tests/test_health.py:test_register_then_login_flow",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:frontend/src/api.js",
+      "target": "function:frontend/src/api.js:request",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:frontend/src/App.jsx",
+      "target": "function:frontend/src/App.jsx:App",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:frontend/src/App.jsx",
+      "target": "function:frontend/src/App.jsx:AuthScreen",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:frontend/src/App.jsx",
+      "target": "function:frontend/src/App.jsx:TaskScreen",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:frontend/src/App.jsx",
+      "target": "function:frontend/src/App.jsx:App",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/main.py",
+      "target": "file:backend/tests/test_health.py",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/app/routers/auth_routes.py",
+      "target": "file:backend/tests/test_health.py",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:frontend/src/App.jsx",
+      "target": "file:frontend/src/App.test.jsx",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/app/routers/auth_routes.py",
+      "target": "function:backend/app/auth.py:hash_password",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/routers/auth_routes.py",
+      "target": "function:backend/app/auth.py:verify_password",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/routers/auth_routes.py",
+      "target": "function:backend/app/auth.py:create_access_token",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/routers/task_routes.py",
+      "target": "function:backend/app/auth.py:get_current_user",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/auth.py",
+      "target": "function:backend/app/config.py:get_settings",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/main.py",
+      "target": "function:backend/app/config.py:get_settings",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/main.py",
+      "target": "function:backend/app/database.py:get_db",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/app/routers/auth_routes.py",
+      "target": "function:backend/app/database.py:get_db",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/app/routers/task_routes.py",
+      "target": "function:backend/app/database.py:get_db",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:frontend/src/App.jsx",
+      "target": "function:frontend/src/api.js:request",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "document:backend/requirements.txt",
+      "target": "file:backend/app/main.py",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:frontend/package.json",
+      "target": "file:frontend/server.js",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:frontend/package.json",
+      "target": "file:frontend/src/main.jsx",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:frontend/vite.config.js",
+      "target": "file:frontend/src/main.jsx",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:frontend/vite.config.js",
+      "target": "file:frontend/src/App.test.jsx",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:frontend/index.html",
+      "target": "file:frontend/src/main.jsx",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:frontend/server.js",
+      "target": "file:frontend/src/main.jsx",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    }
+  ],
+  "layers": [
+    {
+      "id": "layer:documentation",
+      "name": "Tutorial Documentation",
+      "description": "The pedagogical narrative of the project: 14 sequential chapter guides covering local dev through GCP deployment, the top-level README, and the draw.io architecture diagram that anchors the lessons.",
+      "nodeIds": [
+        "document:README.md",
+        "file:architecture.drawio",
+        "document:docs/00-introduction.md",
+        "document:docs/01-project-overview.md",
+        "document:docs/02-local-development.md",
+        "document:docs/03-docker-basics.md",
+        "document:docs/04-gcp-introduction.md",
+        "document:docs/05-vpc-networking.md",
+        "document:docs/06-compute-engine-deployment.md",
+        "document:docs/07-database-setup.md",
+        "document:docs/08-firewalls-and-security.md",
+        "document:docs/09-ci-cd-with-github-actions.md",
+        "document:docs/10-monitoring-and-logging.md",
+        "document:docs/11-troubleshooting.md",
+        "document:docs/12-cleanup-and-cost-management.md",
+        "document:docs/13-next-steps.md"
+      ]
+    },
+    {
+      "id": "layer:frontend",
+      "name": "Frontend (React + Vite)",
+      "description": "The TaskBoard single-page app: React components, Vite build config, the small Express static-server used in the production container, plus the HTML entry, styles, package manifest, and frontend dockerignore.",
+      "nodeIds": [
+        "file:frontend/index.html",
+        "config:frontend/package.json",
+        "file:frontend/server.js",
+        "file:frontend/vite.config.js",
+        "file:frontend/.dockerignore",
+        "file:frontend/src/api.js",
+        "file:frontend/src/App.jsx",
+        "file:frontend/src/App.test.jsx",
+        "file:frontend/src/main.jsx",
+        "file:frontend/src/styles.css"
+      ]
+    },
+    {
+      "id": "layer:backend",
+      "name": "Backend (FastAPI)",
+      "description": "The FastAPI service implementing auth, tasks, persistence and configuration: package init, JWT auth, settings, SQLAlchemy database and models, Pydantic schemas, route modules, app entrypoint, tests, dependency manifest, and backend dockerignore.",
+      "nodeIds": [
+        "file:backend/.dockerignore",
+        "document:backend/requirements.txt",
+        "file:backend/app/__init__.py",
+        "file:backend/app/auth.py",
+        "file:backend/app/config.py",
+        "file:backend/app/database.py",
+        "file:backend/app/main.py",
+        "file:backend/app/models.py",
+        "file:backend/app/schemas.py",
+        "file:backend/app/routers/__init__.py",
+        "file:backend/app/routers/auth_routes.py",
+        "file:backend/app/routers/task_routes.py",
+        "file:backend/tests/__init__.py",
+        "file:backend/tests/test_health.py"
+      ]
+    },
+    {
+      "id": "layer:infrastructure",
+      "name": "Container Infrastructure",
+      "description": "The container topology used both locally and in production: multi-stage Dockerfiles for frontend and backend (with their extracted builder/runtime stages), the docker-compose stack wiring db/backend/frontend, and the .env.example template that parameterizes them.",
+      "nodeIds": [
+        "config:.env.example",
+        "service:backend/Dockerfile",
+        "service:backend/Dockerfile:builder",
+        "service:backend/Dockerfile:runtime",
+        "service:frontend/Dockerfile",
+        "service:frontend/Dockerfile:builder",
+        "service:frontend/Dockerfile:runtime",
+        "service:docker-compose.yml",
+        "service:docker-compose.yml:db",
+        "service:docker-compose.yml:backend",
+        "service:docker-compose.yml:frontend"
+      ]
+    },
+    {
+      "id": "layer:ci-cd-ops",
+      "name": "CI/CD & Operations",
+      "description": "The automation surface that delivers the app to GCP: the three-stage GitHub Actions workflow (test, build, deploy via Workload Identity Federation) plus the VM startup and cleanup shell scripts invoked during provisioning and teardown.",
+      "nodeIds": [
+        "pipeline:.github/workflows/ci-cd.yml",
+        "file:scripts/cleanup.sh",
+        "file:scripts/startup-app.sh",
+        "file:scripts/startup-db.sh"
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "order": 1,
+      "title": "Project Overview & Goals",
+      "description": "Start with the top-level README and the tutorial's introduction chapter. Together they frame what you are about to build (the TaskBoard fullstack app), what cloud and DevOps concepts you will learn (Docker, VPC, Compute Engine, CI/CD, observability), and how the 14 numbered chapters in docs/ are organised. The architecture.drawio diagram is the visual companion that anchors every later chapter — keep it open as a map of the destination system.",
+      "nodeIds": [
+        "document:README.md",
+        "document:docs/00-introduction.md",
+        "file:architecture.drawio"
+      ]
+    },
+    {
+      "order": 2,
+      "title": "What You Are Building — TaskBoard Architecture",
+      "description": "Chapter 01 zooms into the TaskBoard architecture itself: a React/Vite SPA served by Express, a FastAPI backend exposing /api/auth and /api/tasks, and a PostgreSQL database, all wired together into a single-origin experience. Read this before touching any code so the upcoming files (frontend, backend, database) make sense as parts of a coherent system rather than isolated folders.",
+      "nodeIds": [
+        "document:docs/01-project-overview.md"
+      ]
+    },
+    {
+      "order": 3,
+      "title": "Local Development Loop",
+      "description": "Chapter 02 walks through running the whole stack on your laptop using docker-compose with a single .env file. The .env.example documents the eight runtime settings (Postgres credentials, DATABASE_URL, JWT secret/expiry, backend URL, frontend port) that every layer reads — this is the contract that keeps frontend, backend, and database in agreement both locally and in production.",
+      "nodeIds": [
+        "document:docs/02-local-development.md",
+        "config:.env.example"
+      ]
+    },
+    {
+      "order": 4,
+      "title": "Backend Entry Point & Configuration",
+      "description": "Building on the env contract from Step 3, open the FastAPI entry point. main.py wires CORS, registers the auth and task routers, exposes /healthz, and auto-creates tables on startup. config.py is the pydantic-settings layer that loads those env vars into a typed Settings object, while database.py builds the SQLAlchemy engine and session factory the rest of the backend depends on (it has the highest fan-in of any file in the project).",
+      "nodeIds": [
+        "file:backend/app/main.py",
+        "file:backend/app/config.py",
+        "file:backend/app/database.py"
+      ],
+      "languageLesson": "FastAPI uses Python type hints to drive request validation, dependency injection, and OpenAPI docs. Pydantic Settings (BaseSettings) reads environment variables at import time, fails fast on missing values, and gives the rest of the app a typed config object instead of os.getenv strings."
+    },
+    {
+      "order": 5,
+      "title": "Domain Model, Schemas & Auth",
+      "description": "The data layer that the routers in Step 6 will consume. models.py defines the SQLAlchemy User and Task tables that database.py will create on startup; schemas.py defines the matching Pydantic request/response shapes that FastAPI uses for validation and serialization; auth.py centralises password hashing and JWT issue/verify so route handlers stay thin. Together these three files are the contract between HTTP and the database.",
+      "nodeIds": [
+        "file:backend/app/models.py",
+        "file:backend/app/schemas.py",
+        "file:backend/app/auth.py"
+      ],
+      "languageLesson": "SQLAlchemy ORM classes describe rows as Python objects; Pydantic schemas describe HTTP payloads. Keeping them separate (instead of reusing one model for both) prevents leaking database columns into API responses and lets each side evolve independently."
+    },
+    {
+      "order": 6,
+      "title": "API Routes — Auth & Tasks",
+      "description": "With models, schemas, and auth helpers in place, the routers wire HTTP verbs to behaviour. auth_routes.py implements /register, /login, and /me using bcrypt + JWT from Step 5. task_routes.py implements full CRUD on /tasks, gated by a get_current_user dependency so every task is scoped to its owner. These are the endpoints the React frontend will call in Step 8.",
+      "nodeIds": [
+        "file:backend/app/routers/auth_routes.py",
+        "file:backend/app/routers/task_routes.py"
+      ]
+    },
+    {
+      "order": 7,
+      "title": "Frontend — React App, Build & Static Server",
+      "description": "The user-facing half of TaskBoard. main.jsx mounts App.jsx into #root; App.jsx holds the login/register/board UI and calls the backend through api.js. vite.config.js controls the dev server and proxy, while server.js is the slim Express process that serves the built static assets in production and reverse-proxies /api/* to FastAPI — that proxy is what gives the browser a single origin and avoids CORS in production.",
+      "nodeIds": [
+        "file:frontend/src/main.jsx",
+        "file:frontend/src/App.jsx",
+        "file:frontend/src/api.js",
+        "file:frontend/server.js",
+        "file:frontend/vite.config.js"
+      ],
+      "languageLesson": "Vite serves source modules natively in dev and bundles for production. A reverse proxy on the static server (Express -> FastAPI) lets the SPA call /api/* as same-origin requests, sidestepping CORS preflights and cookie/SameSite headaches you would otherwise hit."
+    },
+    {
+      "order": 8,
+      "title": "Containerising the Stack",
+      "description": "Chapter 03 teaches Docker through this project's own images. The backend Dockerfile uses a multi-stage build (builder installs pip deps, runtime copies only the wheels and app code into a slim Python base) and the frontend Dockerfile does the same for Node (builder runs vite build, runtime serves the dist/ via server.js). docker-compose.yml then stitches db, backend, and frontend into one network so the same artefacts run on your laptop and on the GCP VMs later.",
+      "nodeIds": [
+        "document:docs/03-docker-basics.md",
+        "service:backend/Dockerfile",
+        "service:frontend/Dockerfile",
+        "service:docker-compose.yml"
+      ],
+      "languageLesson": "Multi-stage Dockerfiles use two FROM lines: the builder stage has compilers and dev dependencies, the runtime stage copies only the compiled output. This typically drops final image size by 50-80% and shrinks the attack surface by leaving build tools out of production."
+    },
+    {
+      "order": 9,
+      "title": "Google Cloud Foundations — Project & VPC",
+      "description": "Chapters 04 and 05 shift from your laptop to GCP. Chapter 04 sets up the project, billing, and the gcloud CLI; chapter 05 designs the custom VPC, subnets, and routes that the app's two VMs (db and app) will live inside. The VPC is the blueprint for the network boundary you will protect with firewalls in Step 11.",
+      "nodeIds": [
+        "document:docs/04-gcp-introduction.md",
+        "document:docs/05-vpc-networking.md"
+      ]
+    },
+    {
+      "order": 10,
+      "title": "Compute Engine & Database Provisioning",
+      "description": "Chapter 06 spins up two VMs in the VPC; chapter 07 installs and hardens PostgreSQL on the database VM. The startup scripts are what actually run on first boot — startup-db.sh installs Postgres, creates the database and user from project metadata, and configures pg_hba.conf for VPC-internal access; startup-app.sh pulls the latest container images from Artifact Registry and runs them with the production env vars. These scripts are the bridge between provisioning (Terraform/gcloud) and the running app.",
+      "nodeIds": [
+        "document:docs/06-compute-engine-deployment.md",
+        "document:docs/07-database-setup.md",
+        "file:scripts/startup-db.sh",
+        "file:scripts/startup-app.sh"
+      ],
+      "languageLesson": "Compute Engine startup scripts run as root on first boot and on every restart. Keeping them idempotent (check-then-create) is essential — the same script must succeed whether the VM is brand new or rebooting after a crash."
+    },
+    {
+      "order": 11,
+      "title": "Firewalls & Security",
+      "description": "Chapter 08 locks down the network you built in Step 9. You will write firewall rules that allow only HTTP/HTTPS from the internet to the app VM, only port 5432 from the app VM to the db VM, and SSH only via IAP — never open Postgres to the public internet. This chapter is also where JWT, secret rotation, and the .env handling from Step 3 come together as a coherent security story.",
+      "nodeIds": [
+        "document:docs/08-firewalls-and-security.md"
+      ]
+    },
+    {
+      "order": 12,
+      "title": "CI/CD with GitHub Actions",
+      "description": "Chapter 09 automates everything you have been doing by hand. ci-cd.yml is a three-stage workflow: test (pytest + vitest), build (push images to Artifact Registry), and deploy (SSH into the app VM and re-run startup-app.sh). It authenticates to GCP via Workload Identity Federation so there are no long-lived service-account keys in the repo. After this step, every push to main re-deploys the system you built in Steps 8-10.",
+      "nodeIds": [
+        "document:docs/09-ci-cd-with-github-actions.md",
+        "pipeline:.github/workflows/ci-cd.yml"
+      ],
+      "languageLesson": "GitHub Actions workflows use jobs (parallel) and steps (sequential). Workload Identity Federation lets the workflow exchange its OIDC token for a short-lived GCP access token — no JSON keys to leak, and the trust is scoped to a specific repo and branch."
+    },
+    {
+      "order": 13,
+      "title": "Observability — Monitoring & Logging",
+      "description": "Chapter 10 turns on Cloud Logging and Cloud Monitoring for the running VMs and containers. You will set up log-based metrics from the FastAPI /healthz endpoint introduced in Step 4, alert policies for high error rates, and uptime checks that hit the frontend through the public IP. This is where the system stops being a deploy artefact and becomes something you can actually operate.",
+      "nodeIds": [
+        "document:docs/10-monitoring-and-logging.md"
+      ]
+    },
+    {
+      "order": 14,
+      "title": "Troubleshooting, Cleanup & Cost Control",
+      "description": "Chapter 11 is a runbook for the failures you will actually hit (image-pull errors, firewall mismatches, JWT mis-configuration, db connectivity). Chapter 12 — paired with cleanup.sh — tears the whole environment down so the tutorial does not silently burn money: it deletes VMs, the VPC, Artifact Registry images, and the project itself when you are done. Always run cleanup before walking away.",
+      "nodeIds": [
+        "document:docs/11-troubleshooting.md",
+        "document:docs/12-cleanup-and-cost-management.md",
+        "file:scripts/cleanup.sh"
+      ],
+      "languageLesson": "Shell cleanup scripts should be idempotent and fail-soft (use || true on individual deletions). You want a script that can be re-run after partial failures without exploding on already-deleted resources — otherwise a half-cleaned project keeps charging you."
+    },
+    {
+      "order": 15,
+      "title": "Where to Go Next",
+      "description": "Chapter 13 closes the loop: now that you have shipped a real fullstack app to GCP with CI/CD, what are the natural next stops? Managed databases (Cloud SQL), serverless containers (Cloud Run), Infrastructure-as-Code (Terraform), Kubernetes (GKE), and stronger observability. Treat it as a menu of credible follow-up projects that reuse the muscles you built in chapters 00-12.",
+      "nodeIds": [
+        "document:docs/13-next-steps.md"
+      ]
+    }
+  ]
+}
