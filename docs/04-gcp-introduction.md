@@ -115,15 +115,104 @@ You should see your account and project printed.
 
 ## 6. Link a billing account
 
-A new project has no billing account, so GCP will refuse to create paid resources.
+A new project has no billing account, so GCP will refuse to create paid resources or even enable most APIs.
 
-1. Open the Google Cloud Console.
-2. Top-left menu → **Billing**.
-3. If you have no billing account yet, create one (you'll add a card; first-time accounts get $300 free credit).
-4. Link your project to the billing account.
+### 6a. Check what you have
+
+```bash
+gcloud billing accounts list
+```
+
+Two outcomes:
+
+**A) A row appears** — you already have a billing account from somewhere:
+
+```
+ACCOUNT_ID            NAME                OPEN
+01ABCD-234567-EF8901  My Billing Account  True
+```
+
+Copy the `ACCOUNT_ID` and link it to your project:
+
+```bash
+gcloud billing projects link taskboard-learning-1 \
+  --billing-account=01ABCD-234567-EF8901
+```
+
+**B) The list is empty** — you need to create one first:
+
+1. Open https://console.cloud.google.com/billing
+2. Click **Create account** (or **Add billing account**).
+3. Add a card. First-time accounts get **$300 in free credit, 90 days**.
+4. **Billing → Account management → My Projects** → link `taskboard-learning-1`.
+
+Verify it took, either way:
+
+```bash
+gcloud beta billing projects describe taskboard-learning-1
+```
+
+You should see `billingEnabled: true`.
+
+### 6b. What the error looks like if you skip this step
+
+The next command in this chapter is `gcloud services enable …`. If billing isn't linked yet, it fails with something like:
+
+```
+ERROR: (gcloud.services.enable) FAILED_PRECONDITION:
+Billing account for project '560037552805' is not found.
+Billing must be enabled for activation of service(s)
+'artifactregistry.googleapis.com,compute.googleapis.com,...' to proceed.
+```
+
+The error message is precise — go back to § 6a and link the account, then re-run.
+
+### 6c. Work accounts vs personal accounts
+
+If you're logged in with a **work or school Google account** (one that ends in your company's domain, not `@gmail.com`), the org may:
+
+- Block you from creating a personal billing account.
+- Hide org billing accounts so `gcloud billing accounts list` looks empty.
+- Forbid linking arbitrary projects to its billing.
+
+The cleanest fix for a tutorial is to use a **personal Gmail account**:
+
+```bash
+gcloud auth login                              # log in as a personal Gmail
+gcloud config set account you@gmail.com
+gcloud projects create <unique-id> --name="TaskBoard Learning"
+gcloud config set project <unique-id>
+```
+
+Tutorials and the $300 free-tier credit are designed for personal accounts; work-managed accounts usually need an admin's blessing to do the same things.
 
 > ⚠️ **Pitfall**
-> Many tutorials forget this and then say "huh, my command works locally but the cloud says PERMISSION_DENIED". This is the first place to check.
+> Many tutorials forget the billing step and then say "huh, my command works locally but the cloud says PERMISSION_DENIED". This is the first place to check. The second is "am I logged in as the account I think I am?" — `gcloud config list` shows it.
+
+### 6d. Also fix Application Default Credentials (ADC)
+
+After `gcloud auth login` you may see this warning when switching projects:
+
+```
+WARNING: Your active project does not match the quota project in your local
+Application Default Credentials file.
+```
+
+That's because gcloud and ADC are **two separate credential stores**:
+
+| Credential                                | Used by                            | Set by                                    |
+| ----------------------------------------- | ---------------------------------- | ----------------------------------------- |
+| gcloud user credentials                   | every `gcloud …` command           | `gcloud auth login`                       |
+| Application Default Credentials (ADC)     | SDK libraries, Terraform, etc.     | `gcloud auth application-default login`   |
+
+For this tutorial you can ignore the warning — every step uses `gcloud`. But you can silence it cleanly with:
+
+```bash
+gcloud auth application-default login                                  # browser flow
+gcloud auth application-default set-quota-project taskboard-learning-1
+```
+
+After this, both credential stores point at the same project and ADC bills API calls to it.
 
 ---
 
