@@ -70,13 +70,70 @@ A few notes:
 
 The DB VM's script is similar but also installs and configures Postgres (we'll see it in chapter 07).
 
+### Wait — why install Docker *here* and not in the Dockerfile?
+
+This trips up almost everyone the first time. The startup script and the Dockerfile install things into **two different machines, at two different times**:
+
+- **Dockerfile** = what goes *inside the shipping container* (your app + its libraries — Python, FastAPI, your code). Built once on your laptop/CI, versioned, shipped through a registry, and identical everywhere it runs.
+- **Startup script** = what goes *on the host VM* so it can run containers at all (the Docker engine itself), or run a host-level service like Postgres.
+
+Picture the VM as a **ship** and Docker images as **shipping containers** loaded onto it:
+
+```
+   ┌─────────────────────────────────────────────┐
+   │  VM (the ship)        ← startup-app.sh sets  │
+   │  • Debian Linux          this up             │
+   │  • Docker engine                             │
+   │   ┌────────────────────────┐                 │
+   │   │ container (the box)     │ ← Dockerfile    │
+   │   │ • Python + FastAPI      │   sets this up  │
+   │   │ • your app code         │                 │
+   │   └────────────────────────┘                 │
+   └─────────────────────────────────────────────┘
+```
+
+| | Dockerfile | Startup script |
+| --- | ---------- | -------------- |
+| Installs onto | the **container image** | the **VM (host OS)** |
+| Runs when | at **build time** (laptop/CI) | at **first boot** of the VM, as root |
+| Lifecycle | immutable, tagged by git SHA, in Artifact Registry | tied to that one VM; re-running needs a reset/recreate |
+| Example here | `pip install` deps, copy app code | `apt-get install docker.io` (app VM), Postgres (db VM) |
+
+**Rule of thumb:** if it's *part of your application* → Dockerfile. If it's *what the machine needs to host or run* that application → startup script. That's exactly why CI/CD in chapter 09 can redeploy your app a hundred times without ever re-touching the VM's setup: the app rides in the image; the VM setup stays put.
+
+> 🛢️ The DB VM is the one exception to "apps go in containers" — there we install Postgres *directly on the host* via the startup script, because in this tutorial the database is a long-lived, stateful host service rather than a shipped image. Chapter 07 explains that choice.
+
 ---
 
 ## 4. Create the VMs
 
-> Before running these commands, make sure you completed chapter 05 (VPC + subnet exist) and chapter 04 (region/zone defaults set).
+> Before running these commands, make sure you completed chapter 05 (VPC + subnet exist).
 
-### 4a. DB VM (internal only)
+### 4a. Set your default region and zone first
+
+If you skip this, `gcloud compute instances create` will stop and make you pick a zone from a list of 130+ — and the zone **must** be inside the same region as your subnet (`europe-west1` from chapter 05), or the `--subnet=app-subnet` flag will fail.
+
+> 📍 In that interactive list, the `europe-west1` zones are **`[52]` `europe-west1-b`**, **`[53]` `europe-west1-c`**, **`[54]` `europe-west1-d`**. (The numbers can shift as Google adds zones, and the list truncates after 50 — type `list` at the prompt to see them all. Note the prompt wants the *number*, not the zone name.)
+
+Set both defaults once so every `compute` command stops prompting:
+
+```bash
+gcloud config set compute/region europe-west1
+gcloud config set compute/zone europe-west1-b
+```
+
+> ⚠️ Setting only the **region** is not enough — VM creation needs a **zone** (the letter-suffixed `-b`/`-c`/`-d` part). Set both.
+
+Confirm they stuck:
+
+```bash
+gcloud config get-value compute/region
+gcloud config get-value compute/zone
+```
+
+If you'd rather not set defaults, add `--zone=europe-west1-b` to each `create` command instead.
+
+### 4b. DB VM (internal only)
 
 ```bash
 gcloud compute instances create taskboard-db \
@@ -96,7 +153,7 @@ What each flag means:
 - `--tags=db` — used by firewall rules later.
 - `--metadata-from-file=startup-script=…` — runs on first boot.
 
-### 4b. App VM (public)
+### 4c. App VM (public)
 
 ```bash
 gcloud compute instances create taskboard-app \
@@ -153,6 +210,26 @@ gcloud compute ssh taskboard-db  --tunnel-through-iap
 
 Behind the scenes: gcloud opens an authenticated tunnel through Google's edge, which then connects to port 22 on the VM via the **internal** network. No public port 22 is ever exposed.
 
+### What is this shell you just landed in?
+
+Once SSH connects, your prompt changes to something like `yourname@taskboard-app:~$`. **You are now typing commands inside the VM**, not on your laptop — it's a regular Debian Linux machine running in Google's data center, and this is its terminal. Anything you run here happens on the cloud VM. Type `exit` (or press `Ctrl+D`) to return to your laptop's PowerShell.
+
+**On the app VM** (`taskboard-app`) the shell is where you:
+
+- Verify the box is healthy — is Docker installed? did the startup script finish? (that's exactly step 6 below)
+- Pull and run your application container, view its logs (`docker ps`, `docker logs`), and restart it
+- Debug "why isn't the site loading?" — check the container, ports, and processes from the inside
+
+Think of it as the maintenance hatch for the machine that serves your users.
+
+**On the DB VM** (`taskboard-db`) the shell is your *only* way in — remember it has **no external IP**, so IAP tunneling is the sole door. There you:
+
+- Confirm Postgres is installed and running (`sudo systemctl status postgresql`)
+- Open the database console with `sudo -u postgres psql` to inspect tables, run queries, or create the app's database/user
+- Check logs if the app can't connect
+
+Because the DB is internal-only, you can't reach it from your laptop directly — you SSH into *it* (or tunnel a port) whenever you need to poke at the data. That isolation is the whole security point from chapter 05.
+
 > 💡 If `--tunnel-through-iap` fails with an IAM error, you may also need to grant your user `roles/iap.tunnelResourceAccessor`. Run:
 > ```bash
 > gcloud projects add-iam-policy-binding $(gcloud config get-value project) \
@@ -189,6 +266,18 @@ We're going to do this *for real* via CI/CD in chapter 09. For now, do it by han
 sudo docker run --rm -p 8000:8000 hashicorp/http-echo:1.0.0 -text="hello from the cloud"
 ```
 
+> 🪧 **This is just a `console.log("hello")`, not your app.** `hashicorp/http-echo` is a throwaway image that does nothing but echo back the `-text` string on a port. We use it purely to prove the infrastructure works (Docker runs, a container can serve a port). Your *real* backend isn't deployed until chapter 09 — don't read anything more into this image.
+
+**Find the app VM's external IP.** You saw it in the `EXTERNAL_IP` column of `gcloud compute instances list`, but you can also grab just that value directly:
+
+```bash
+gcloud compute instances describe taskboard-app --format="get(networkInterfaces[0].accessConfigs[0].natIP)"
+```
+
+**What `--format` is doing:** `gcloud describe` normally dumps the VM's *entire* config (dozens of fields). The `--format` flag reshapes that output, and `get(...)` is a projection that prints **just one field's value** — no key, no table, no quotes — which is perfect for copy-paste or piping into another command. The dotted path navigates the VM's structure: `networkInterfaces[0]` = the first network card, `accessConfigs[0]` = its first external-IP config, `natIP` = the public IP itself. (The internal IP lives at `networkInterfaces[0].networkIP` if you ever need that instead.)
+
+> 🖥️ **Prefer a UI?** Open the [Cloud Console](https://console.cloud.google.com) → **Navigation menu (☰) → Compute Engine → VM instances**. You'll see both VMs, their internal/external IPs, and a status dot. Clicking a VM shows its full config and an in-browser SSH button.
+
 Now from **your laptop**:
 
 ```bash
@@ -215,7 +304,13 @@ If cost is a problem, you can use `e2-micro` instead of `e2-small` for both VMs 
 
 - The first boot of a VM can take 30–60 seconds before SSH responds. Be patient.
 - `gcloud compute instances list` only shows VMs in your **default project**.
-- Stopping a VM (`gcloud compute instances stop`) costs (almost) nothing for compute, but the **disk** keeps billing. Delete the VM to stop disk charges.
+- Stopping a VM halts the compute charge but the **disk** keeps billing. You must name the instance(s) — a bare `gcloud compute instances stop` errors with *"argument INSTANCE_NAMES: Must be specified"*. Stop both like this (zone comes from your default):
+
+  ```bash
+  gcloud compute instances stop taskboard-app taskboard-db
+  ```
+
+  Start them again later with `gcloud compute instances start taskboard-app taskboard-db`. To stop disk charges entirely, `delete` the VMs instead — but that also wipes their disks.
 - If you SSH the first time and get "permission denied", give the VM another 20 seconds — IAM permissions sometimes lag the create call.
 
 ---

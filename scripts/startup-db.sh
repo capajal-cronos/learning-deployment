@@ -7,7 +7,20 @@
 # =============================================================================
 set -euo pipefail
 
-# 1) Install Postgres 16 from Debian's package repos.
+# 1) Install Postgres 16 from the official PostgreSQL (PGDG) apt repo.
+#    Debian 12 "bookworm" only ships postgresql-15 in its default repos, so we
+#    add apt.postgresql.org to get 16. (See https://www.postgresql.org/download/linux/debian/)
+apt-get update -y
+apt-get install -y curl ca-certificates gnupg lsb-release
+
+install -d /usr/share/postgresql-common/pgdg
+curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+  -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+
+CODENAME="$(lsb_release -cs)"   # e.g. "bookworm"
+echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${CODENAME}-pgdg main" \
+  > /etc/apt/sources.list.d/pgdg.list
+
 apt-get update -y
 apt-get install -y postgresql-16
 

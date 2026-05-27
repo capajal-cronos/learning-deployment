@@ -150,6 +150,40 @@ nc -vz taskboard-db 5432           # works → firewall + DNS OK
 psql "postgresql://..." -c "\l"    # works → auth OK
 ```
 
+**Read the exact `psql` error — it tells you where the boundary is:**
+
+| `psql` error | What it means | Where to look |
+| ------------ | ------------- | ------------- |
+| `Connection timed out` | Packets are being **dropped** | Firewall — the `allow-internal-db` rule (tcp:5432 from `10.10.0.0/24`, target tag `db`) is missing or wrong. Create it (chapter 08 Rule 3). |
+| `Connection refused` | Packets **reached** the DB VM but nothing is listening on 5432 | Postgres on the DB VM — it's not running, not installed, or only listening on `localhost`. SSH in and diagnose (below). |
+| `no pg_hba.conf entry for host …` | Network + listener are fine | `pg_hba.conf` is missing the `host all all 10.10.0.0/24 md5` line, or you're connecting from outside the subnet. |
+| `password authentication failed` | Everything works except the credential | The role password ≠ what you passed. The `db-password` metadata was likely set *after* first boot — see chapter 07 §1. |
+
+### "Connection refused" → diagnose Postgres on the DB VM
+
+SSH into the DB VM (`gcloud compute ssh taskboard-db --tunnel-through-iap`) and run:
+
+```bash
+sudo cat /var/log/startup-complete.log                       # 1) did the startup script finish?
+sudo systemctl status postgresql@16-main --no-pager          # 2) is Postgres running?
+sudo ss -lntp | grep 5432                                    # 3) what is it listening on?
+sudo grep -E "^listen_addresses" /etc/postgresql/16/main/postgresql.conf   # 4) bound to all interfaces?
+```
+
+Interpreting step 3:
+
+- `127.0.0.1:5432` only → Postgres is up but listening on **localhost**. The `listen_addresses = '*'` change didn't apply; fix `postgresql.conf` and `sudo systemctl restart postgresql@16-main`.
+- **Nothing** → Postgres isn't running or was never installed. Check steps 1 & 2; the startup script likely failed early.
+- `*:5432` / `0.0.0.0:5432` → it *is* listening; the problem is elsewhere (firewall or `pg_hba.conf`).
+
+**If nothing is installed at all** (no service, no `/etc/postgresql/16/`, no completion log), the startup script aborted on its first error (`set -euo pipefail`). The classic cause on Debian 12 "bookworm": `apt-get install postgresql-16` fails because bookworm's default repos only ship `postgresql-15`. Confirm with:
+
+```bash
+sudo journalctl -u google-startup-scripts.service --no-pager | grep -iE "locate package|unable|error" | tail -20
+```
+
+The fix is to add the PGDG apt repo before installing (already done in `scripts/startup-db.sh`). After fixing the script, re-run it — see chapter 07 § "Re-running a fixed startup script".
+
 ### "DNS resolves on Compose but not in production"
 
 The Compose service name (`backend`, `db`) only works inside the Compose network. In production, hostnames are **VM names** (`taskboard-db`) inside the same VPC. Check the connection string env var.

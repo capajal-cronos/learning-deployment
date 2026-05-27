@@ -245,6 +245,8 @@ Each line is a service:
 
 It's fine if the command takes a minute.
 
+> 🖥️ **See them in the UI:** Console → **APIs & Services → Enabled APIs & services** lists everything that's on, with per-API usage graphs. To turn one on by hand instead of the CLI, use **APIs & Services → Library**, search, and click **Enable**.
+
 ---
 
 ## 8. Set a default region and zone

@@ -196,6 +196,8 @@ echo "projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL}/
 
 > ⚠️ **The `attribute-condition`** is the key security control: even if some other GitHub repo tried to impersonate this SA, GCP would reject it because `assertion.repository` wouldn't match.
 
+> 🖥️ **See it in the UI:** Console → **IAM & Admin → Workload Identity Federation** shows your pool (`github-pool`) and provider, including the attribute mapping and condition. The deployer service account itself lives under **IAM & Admin → Service Accounts** — open it to confirm which principals are allowed to impersonate it.
+
 ---
 
 ## 6. Artifact Registry
@@ -218,6 +220,8 @@ The full reference for the backend image then becomes:
 That's what the pipeline pushes to.
 
 > 💡 We tag every image with the **short git SHA** (immutable, traceable) and also with `latest` (for convenience). In real production you usually drop `latest` to prevent ambiguity — see chapter 13.
+
+> 🖥️ **See it in the UI:** Console → **Artifact Registry → Repositories → `taskboard`** lists every pushed image and tag, with sizes, push timestamps, and (if enabled) vulnerability-scan results. After your first deploy, this is where you confirm the image actually landed and find the SHA tags you'd roll back to.
 
 ---
 

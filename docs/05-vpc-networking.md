@@ -164,6 +164,8 @@ gcloud compute networks subnets list --filter="network~taskboard-vpc"
 
 You should see your VPC and the subnet with CIDR `10.10.0.0/24`.
 
+> 🖥️ **See it in the UI:** Console → **VPC network → VPC networks** shows `taskboard-vpc`; click it to see its subnets, IP ranges, routes, and (later) firewall rules all on one page. It's the clearest way to *picture* the network you just built from the CLI.
+
 ### What just happened?
 
 You created an *empty* private network. No VMs in it yet. Behind the scenes, GCP also added:
@@ -176,10 +178,12 @@ You can confirm:
 
 ```bash
 gcloud compute routes list --filter="network=taskboard-vpc"
-gcloud compute firewall-rules list --filter="network=taskboard-vpc"
+gcloud compute firewall-rules list --filter="network=taskboard-vpc" --format=json
 ```
 
-Routes: two. Firewall rules: zero (we'll add ours in chapter 08).
+Routes: two. Firewall rules: zero — printed as an empty list `[]` (we'll add ours in chapter 08).
+
+> 💡 Without `--format=json`, `gcloud` prints a notice like *"To show all fields of the firewall, please show in JSON format"* instead of a result, because there are no rows to render in a table. Asking for JSON gives you a clean `[]`.
 
 ---
 

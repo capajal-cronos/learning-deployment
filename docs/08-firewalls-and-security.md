@@ -96,6 +96,8 @@ gcloud compute firewall-rules list --filter="network=taskboard-vpc"
 
 You should see exactly three custom rules, plus whatever default rules GCP has.
 
+> 🖥️ **See them in the UI:** Console → **VPC network → Firewall**. Each rule shows its direction, targets (by tag), source ranges, and ports at a glance — much easier to eyeball than the CLI list. You can also toggle **logging** on a rule here to record allowed/denied packets.
+
 > ⚠️ **Pitfall**
 > When in doubt, **trace the source IP** of a packet that fails. Most firewall mysteries are "this packet doesn't actually come from where I think it does".
 
@@ -127,6 +129,8 @@ A service account named `github-deployer@<project>.iam.gserviceaccount.com` with
 
 That's already more than minimum, but each role has a clear story. Avoid `roles/editor` and `roles/owner` for automation.
 
+> 🖥️ **See it in the UI:** Console → **IAM & Admin → IAM** lists every principal (you, service accounts, groups) and the roles each holds. Tick **Include Google-provided role grants** to see the full picture. This is the fastest way to answer "who can touch this project, and with what power?"
+
 ---
 
 ## 4. Storing the JWT secret and DB password
@@ -152,6 +156,8 @@ gcloud secrets versions access latest --secret=db-password
 
 > 💡 **What just happened?**
 > Secret Manager stores each value as an immutable **version**. New values become version 2, 3, … . Apps usually read `latest` but can pin to a specific version for safety during rollouts.
+
+> 🖥️ **See it in the UI:** Console → **Security → Secret Manager** lists your secrets, their versions, and which principals can access each one (the **Permissions** tab). The values stay hidden until you explicitly click to reveal a version — so the UI is safe to browse without leaking anything.
 
 Then, when the pipeline runs, it will:
 

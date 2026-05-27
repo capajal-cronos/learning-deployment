@@ -10,7 +10,7 @@ We also talk about the trade-offs of self-managed Postgres vs **Cloud SQL** so y
 
 Recap of `scripts/startup-db.sh`:
 
-1. Installed `postgresql-16` from Debian's repos.
+1. Added the official PostgreSQL (PGDG) apt repo and installed `postgresql-16`. (Debian 12 "bookworm" only ships `postgresql-15` by default, so we add `apt.postgresql.org` to get 16.)
 2. Edited `postgresql.conf` so Postgres listens on **all interfaces** of the VM (not just localhost).
 3. Edited `pg_hba.conf` so password-authenticated connections from `10.10.0.0/24` are allowed.
 4. Created a role `taskboard` and a database `taskboard`.
@@ -32,6 +32,25 @@ gcloud compute instances add-metadata taskboard-db \
 
 > ⚠️ **Pitfall**
 > Setting the metadata *after* the VM has already booted does **not** re-run the startup script. Either reboot the VM (`gcloud compute instances reset taskboard-db`) or set the metadata **before** creating the VM.
+
+> 🖥️ **See it in the UI:** Console → **Compute Engine → VM instances → `taskboard-db`**. The detail page lists every metadata key (including `startup-script`) under **Metadata**, and the **Logs** link there jumps straight to this VM's serial/startup output — handy for confirming the script actually ran.
+
+### Re-running a fixed startup script
+
+If you edit `scripts/startup-db.sh` after the VM already exists, the VM keeps using the **old copy stored in its metadata** — editing the local file changes nothing until you push it and reboot. The VM runs the metadata copy on every boot, so the recipe is:
+
+```bash
+# 1) Push the updated script into the VM's metadata (overwrites the old copy).
+gcloud compute instances add-metadata taskboard-db \
+  --metadata-from-file=startup-script=scripts/startup-db.sh
+
+# 2) Reboot — GCE re-runs the startup script on boot.
+gcloud compute instances reset taskboard-db
+```
+
+Wait ~1–2 minutes, then confirm it completed by SSHing in and checking `sudo cat /var/log/startup-complete.log`.
+
+> ⚠️ A startup script that previously **failed partway** can leave the VM in a half-configured state. Our script is mostly safe to re-run (the role uses `IF NOT EXISTS`), but `CREATE DATABASE` is not idempotent — if it already exists, that line errors. If a re-run misbehaves, the cleanest reset for a learning DB is to delete and recreate the VM. See chapter 11 for the full "connection refused" diagnosis flow.
 
 ---
 
@@ -156,6 +175,7 @@ The FastAPI app calls `Base.metadata.create_all` at startup, which is fine for *
 | Symptom                                                | Likely cause                                                                  |
 | ------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | `psql: error: connection to server at "taskboard-db", port 5432 failed: timeout` | Missing firewall rule for port 5432. See chapter 08.        |
+| `... port 5432 failed: Connection refused`             | Packets reach the VM but nothing listens on 5432 — Postgres isn't installed/running. Common cause: the startup script aborted on `apt-get install postgresql-16` because Debian 12 needs the PGDG repo. See chapter 11. |
 | `FATAL: no pg_hba.conf entry for host …`               | Source IP isn't in `10.10.0.0/24`. Are you on the right VM/subnet?            |
 | `FATAL: password authentication failed`                | Metadata `db-password` was set after first boot. Reset the VM or recreate.    |
 | Backend can't connect on container startup             | The DB VM is rebooting or still running its startup script. Wait a minute.    |
