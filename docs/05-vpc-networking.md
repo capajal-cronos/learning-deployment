@@ -109,9 +109,9 @@ That's why a VM with an external IP can reach the internet without you doing any
 > 🧠 **Think first**
 > Our DB VM has *no* external IP. Can it install OS updates from the internet? Why or why not?
 
-By default, no — packets can leave (via the internal route → … → internet gateway) but the response needs a way back. Without an external IP, packets from the internet can't return to it. The standard fix is **Cloud NAT**: a managed NAT gateway that gives internal-only VMs outbound internet without giving them an inbound public address. We mention this again in chapter 13.
+By default, no — packets can leave (via the internal route → … → internet gateway) but the response needs a way back. Without an external IP, packets from the internet can't return to it. The standard fix is **Cloud NAT**: a managed NAT gateway that gives internal-only VMs outbound internet without giving them an inbound public address.
 
-For this tutorial, we'll keep the DB simple by installing Postgres at VM creation time and not relying on outbound internet later.
+This bites you immediately, by the way: the DB VM's startup script needs to `apt-get install postgresql-16` from `deb.debian.org` and `www.postgresql.org` — both public internet destinations. Without Cloud NAT in place, the DB VM's first boot will fail with a wall of `Network is unreachable` and `connection timed out` errors, no `postgres` user gets created, and step 7 of chapter 07 (the `pg_dump` exercise) breaks with `sudo: unknown user postgres`. **Set up Cloud NAT before you create the DB VM** — instructions are in section 8 below.
 
 ---
 
@@ -177,7 +177,7 @@ You created an *empty* private network. No VMs in it yet. Behind the scenes, GCP
 You can confirm:
 
 ```bash
-gcloud compute routes list --filter="network=taskboard-vpc"
+gcloud compute routes list --filter="network~taskboard-vpc"
 gcloud compute firewall-rules list --filter="network=taskboard-vpc" --format=json
 ```
 
@@ -185,9 +185,135 @@ Routes: two. Firewall rules: zero — printed as an empty list `[]` (we'll add o
 
 > 💡 Without `--format=json`, `gcloud` prints a notice like *"To show all fields of the firewall, please show in JSON format"* instead of a result, because there are no rows to render in a table. Asking for JSON gives you a clean `[]`.
 
+### "Why is everything empty?" — a sanity check
+
+Right after creating the VPC, it's normal to run a few `list` commands and see nothing. Three things to know:
+
+**1. Subnets list is empty until you create one.**
+You used `--subnet-mode=custom`, which means *"don't auto-create subnets in every region, I'll define them myself"*. The opposite, `--subnet-mode=auto`, would have spawned a `/20` in every GCP region — convenient but wasteful and harder to reason about. Custom mode starts you with zero subnets on purpose. Run command 2 above (`networks subnets create app-subnet ...`) and re-run the list.
+
+**2. Routes list looks empty with `=`, but routes do exist.**
+Every VPC gets default routes automatically. The catch is the `network` field stores a full URL like `https://www.googleapis.com/compute/v1/projects/.../networks/taskboard-vpc`, not the short name. So `--filter="network=taskboard-vpc"` matches nothing. Use the substring operator instead:
+
+```bash
+gcloud compute routes list --filter="network~taskboard-vpc"
+```
+
+The `~` means "contains". You'll see the default `0.0.0.0/0` route (your doorway to the internet) plus a route per subnet once subnets exist.
+
+**3. Firewall rules list is genuinely empty — and that's the point.**
+A brand-new custom VPC has **zero** firewall rules. GCP's default policy is *deny all ingress, allow all egress*, so nothing can reach your VMs until you add allow rules (we do that in chapter 08). An empty list here is the secure default, not a bug.
+
 ---
 
-## 8. The end-to-end picture
+## 8. Cloud NAT — outbound internet for private VMs
+
+Our DB VM is created with `--no-address` (no external IP) so the internet can't reach it. But it still needs to *talk to* the internet for one critical thing: installing Postgres during first boot. Without a way out, the startup script's `apt-get install postgresql-16` hangs and times out, no `postgres` user is ever created, and the DB VM ends up broken.
+
+### First: what is NAT?
+
+**NAT** stands for **Network Address Translation**. It's the trick that lets a machine with a *private* IP address (one that's not reachable from the public internet) still *talk to* the internet by borrowing a public IP for the duration of each connection.
+
+You already use NAT every day without thinking about it. Your laptop at home has a private IP like `192.168.1.42` — that address means nothing on the public internet. When you load a webpage, your home router does the translation:
+
+```
+   Laptop                  Router (your public IP: 84.12.5.99)              Internet
+   192.168.1.42  ──────►   src 192.168.1.42 → rewritten to src 84.12.5.99   ──────►  google.com
+                ◄──────    dst 84.12.5.99 → rewritten to dst 192.168.1.42   ◄──────
+```
+
+Two key properties of NAT:
+
+1. **It rewrites the source IP on the way out**, so the destination server sees the *router's* public IP, not the laptop's private one.
+2. **It remembers the mapping** so it can deliver the reply back to the right laptop. The router keeps a table: "this outgoing connection from 192.168.1.42 is using public port X — any reply on port X goes back to 192.168.1.42."
+
+A side effect: NAT is naturally **one-way**. A random server on the internet *cannot* initiate a connection to your laptop, because the router has no entry for it in the translation table. The connection has to start from the inside. That's why NAT doubles as a basic firewall.
+
+### Cloud NAT is the same idea, but managed by GCP
+
+Your home router does NAT for your home network. **Cloud NAT** does NAT for your VPC: it gives private VMs (the ones created with `--no-address`) a borrowed public IP to use when they need to reach the internet, while keeping them un-reachable from the internet.
+
+It's the same pattern as your home network, just GCP-managed and region-scoped instead of running on a physical box in your living room.
+
+### Mental model
+
+```
+   DB VM (no external IP, 10.10.0.6)
+            │
+            │  outbound packet to www.postgresql.org
+            ▼
+   ┌──────────────────────────┐
+   │  Cloud NAT in <region>   │   ← rewrites source IP to a public NAT IP
+   └──────────┬───────────────┘
+              │
+              ▼
+        internet
+```
+
+Inbound from the internet? Still blocked. The VM has no external IP and no firewall rule lets random sources in. Cloud NAT is **strictly outbound** — exactly like your home router doesn't let random people from the internet open connections to your laptop.
+
+### Hands-on — create the NAT gateway
+
+You need two resources: a **Cloud Router** (a logical control plane object — even though we're not actually routing BGP) and a **NAT config** attached to it.
+
+```bash
+REGION=<your-region>     # same region as your subnet
+
+# 1. The Cloud Router — required scaffolding, even for NAT-only use.
+gcloud compute routers create taskboard-router \
+  --network=taskboard-vpc \
+  --region=$REGION
+
+# 2. The NAT config — applies to every subnet in this region, with
+#    auto-allocated public NAT IPs (cheap and fine for a tutorial).
+gcloud compute routers nats create taskboard-nat \
+  --router=taskboard-router \
+  --region=$REGION \
+  --nat-all-subnet-ip-ranges \
+  --auto-allocate-nat-external-ips
+```
+
+Verify:
+
+```bash
+gcloud compute routers nats list --router=taskboard-router --region=$REGION
+```
+
+You should see `taskboard-nat` with `--nat-all-subnet-ip-ranges` enabled.
+
+> 🖥️ **See it in the UI:** Console → **Network services → Cloud NAT** shows your gateway, the auto-allocated NAT IP(s), and a per-VM usage breakdown once VMs start talking out.
+
+### When to create it
+
+**Before** you create the DB VM in chapter 06. Startup scripts run *once* at first boot; if the script fails because there's no internet, rebooting won't re-run it. You'd either have to delete and recreate the VM, or run the script manually over SSH (annoying — see chapter 11 for that recovery).
+
+### Who actually uses Cloud NAT?
+
+Once Cloud NAT exists in a region, it automatically covers every `--no-address` VM in that region — you don't attach it to specific VMs. But it's only relevant for VMs *without* an external IP. The split for our tutorial:
+
+| VM              | External IP?        | How it reaches the internet                              |
+| --------------- | ------------------- | -------------------------------------------------------- |
+| `taskboard-app` | Yes                 | Directly, via its own external IP. **Bypasses Cloud NAT.** |
+| `taskboard-db`  | No (`--no-address`) | Through Cloud NAT. **Required, or apt installs fail.**   |
+
+A VM that already has an external IP is its own door to the internet — adding NAT to the path would be redundant. NAT is *only* a workaround for the missing public address on private VMs.
+
+### Does every VM "need" NAT?
+
+The better question is *"should every VM be `--no-address`?"*, and the answer is **yes for almost everything except VMs that must be directly reachable from the public internet**. The grown-up pattern:
+
+- DB, internal services, workers, build runners → `--no-address`, outbound via Cloud NAT, reachable only inside the VPC.
+- Public-facing front door → a **load balancer** with a public IP, with the actual VMs sitting behind it as `--no-address`. The LB is the only thing with a public address.
+
+In this tutorial we cheat by giving the app VM its own external IP, because you don't have a load balancer set up yet. That's fine for learning; in production you'd put the app VM behind an HTTPS LB and drop its external IP — at which point Cloud NAT covers *every* VM in the project, not just the DB.
+
+### Cost note
+
+Cloud NAT has a small per-hour charge for the gateway plus per-GB egress. For a tutorial it's a few cents a day. When you tear everything down in chapter 12, also delete the NAT and router (we cover this in the cleanup script).
+
+---
+
+## 9. The end-to-end picture
 
 Here's how a packet will eventually flow once everything is built:
 
@@ -218,7 +344,7 @@ If you understand this picture, you understand cloud networking better than 80% 
 
 ---
 
-## 9. Common beginner mistakes
+## 10. Common beginner mistakes
 
 | Mistake                                              | Fix / explanation                                                          |
 | ---------------------------------------------------- | -------------------------------------------------------------------------- |
@@ -230,7 +356,7 @@ If you understand this picture, you understand cloud networking better than 80% 
 
 ---
 
-## 10. Checkpoint ✅
+## 11. Checkpoint ✅
 
 1. What's the difference between a VPC and a subnet?
 2. Why is a private IP like `10.10.0.5` not reachable from the internet?
@@ -245,12 +371,12 @@ If you understand this picture, you understand cloud networking better than 80% 
 
 ---
 
-## 11. Optional exercise 🧪
+## 12. Optional exercise 🧪
 
 Run:
 
 ```bash
-gcloud compute routes list --filter="network=taskboard-vpc"
+gcloud compute routes list --filter="network~taskboard-vpc"
 ```
 
 You'll see two routes. Pick the `0.0.0.0/0` route and look at the next-hop field. What does the value mean?

@@ -44,7 +44,58 @@ If a single layer is bypassed, the next one (hopefully) still holds.
 
 We saw the *shape* of these in chapter 05. Now we create them.
 
+### Anatomy of a `firewall-rules create` command
+
+A GCP firewall rule is a single sentence: *"on this network, allow/deny traffic going this direction, on these protocols/ports, from these sources, to these targets."* The flags are just the words of that sentence — the rule below literally reads as *"in `taskboard-vpc`, allow incoming TCP/22 from `35.235.240.0/20` to any VM tagged `app` or `db`."*
+
+Field by field:
+
+| Flag | What it is | Concrete example | Notes |
+|---|---|---|---|
+| `allow-ssh-from-iap` | The **name** you give this rule. Yes — you invent it. | `allow-ssh-from-iap` | Must be unique **per project**, not per VPC. That's why you sometimes hit "already exists" even when you think you're in a clean state. |
+| `--network` | Which VPC the rule belongs to | `taskboard-vpc` | Required for custom-mode VPCs. A rule in `vpc-A` has no effect on traffic in `vpc-B`. |
+| `--direction` | INGRESS = traffic coming **in** to a VM. EGRESS = traffic going **out**. | `INGRESS` | Almost every rule you'll write is INGRESS. GCP defaults egress to "allow all" and ingress to "deny all". |
+| `--action` | ALLOW or DENY. | `ALLOW` | Most rules are ALLOW (we're poking holes in the default-deny). DENY rules exist but are rarely needed. |
+| `--rules` | The protocol(s) and port(s) covered. Format: `protocol:port` or just `protocol`. Multiple separated by commas. | `tcp:22`, `tcp:80,tcp:443`, `tcp:5432`, `icmp` | `tcp:22` = SSH. `tcp:5432` = Postgres. `icmp` = ping. You can also write `tcp` alone to mean "all TCP ports". |
+| `--source-ranges` | Where the traffic must come **from** (a list of CIDR blocks). | `35.235.240.0/20`, `0.0.0.0/0`, `10.10.0.0/24` | `0.0.0.0/0` = the whole public internet. A private CIDR like `10.10.0.0/24` = only your subnet. `35.235.240.0/20` = Google's IAP tunnel range. |
+| `--target-tags` | Which VMs the rule applies **to**, identified by **network tags** (NOT names). | `app`, `db`, `app,db` | When you created the VMs you used `--tags=app` and `--tags=db`. That's the link. A VM without the matching tag is invisible to this rule. |
+
+The bottom three flags (`--rules`, `--source-ranges`, `--target-tags`) are where each rule's intent really lives — the others are boilerplate. We comment those three on every rule below to explain *why* those specific values.
+
+Two convenient features that make this scale:
+
+1. **Tags are how a rule finds its VMs.** No IP lists to maintain. Add `--tags=db` to a new VM and every `db`-targeted rule automatically applies to it. Remove the tag and the rules stop applying.
+2. **The default is deny.** A new custom-mode VPC starts with **zero** ingress allowed. Every "open" port is a deliberate rule you wrote. There is no "and don't forget to block the rest" — that's automatic.
+
+### "Already exists" — what to do
+
+Firewall rules are global per-project. If you (or a teammate) ran `firewall-rules create` for the same name before, you'll get:
+
+```
+ERROR: ... The resource 'projects/<project>/global/firewalls/<rule>' already exists
+```
+
+Three options:
+
+```bash
+# 1. Inspect the existing rule — usually it's already correct and you can just move on.
+gcloud compute firewall-rules describe <rule-name>
+
+# 2. Edit in place (works for ports, sources, tags — but NOT --network).
+gcloud compute firewall-rules update <rule-name> --source-ranges=10.10.0.0/24
+
+# 3. Nuke and re-create (the only path if --network is wrong).
+gcloud compute firewall-rules delete <rule-name> --quiet
+# then re-run the original create command
+```
+
+---
+
 ### Rule 1 — SSH via IAP only
+
+**What it grants:** SSH access (TCP/22) into both the app VM and the DB VM.
+**Why we need it:** We have to log into these machines to install packages, inspect logs, debug startup scripts, and run one-off commands. Without an SSH rule, the default-deny blocks every `gcloud compute ssh` attempt.
+**Why narrowly:** Port 22 exposed to the open internet is one of the most-attacked surfaces in cloud — botnets brute-force it within minutes of a VM coming online. So we don't open 22 to `0.0.0.0/0`. Instead, we restrict the source to **Google's IAP (Identity-Aware Proxy) range**: the only way to reach 22 is through an authenticated `gcloud compute ssh --tunnel-through-iap`, where Google has already verified your identity *before* the TCP connection even starts.
 
 We created this temporarily in chapter 06. Re-state it here for completeness:
 
@@ -62,6 +113,10 @@ gcloud compute firewall-rules create allow-ssh-from-iap \
 
 ### Rule 2 — Public HTTP/HTTPS to the app
 
+**What it grants:** HTTP (TCP/80) and HTTPS (TCP/443) into the **app VM only**.
+**Why we need it:** This is the user-facing surface. Anyone on the internet who types your domain (or external IP) into a browser needs to reach the app VM, and browsers only speak 80 and 443 by default.
+**Why narrowly:** Even though the source is the whole internet (`0.0.0.0/0`), the rule's reach is limited *by target*. It only applies to VMs tagged `app`. The DB VM has no `app` tag, so the public internet still has zero paths to it — exactly what we want. We also list only ports 80 and 443: nothing else (no random debugging ports, no Postgres, no Redis) is exposed.
+
 ```bash
 gcloud compute firewall-rules create allow-http-public \
   --network=taskboard-vpc \
@@ -75,6 +130,10 @@ gcloud compute firewall-rules create allow-http-public \
 This is the *only* rule that allows traffic from the open internet. It is narrowly scoped to TCP 80 and 443, and only to VMs tagged `app`. The DB VM is **not** tagged `app`, so this rule has no effect on it.
 
 ### Rule 3 — Internal DB access
+
+**What it grants:** Postgres traffic (TCP/5432) into the **DB VM only**, and **only from inside the VPC**.
+**Why we need it:** The backend container running on the app VM needs to open connections to Postgres. Without this rule, even legitimate backend-to-DB traffic would hit the default-deny — your API would just hang.
+**Why narrowly:** The DB is the most valuable thing in the stack, so it gets the tightest rule of all three. Source is restricted to `10.10.0.0/24` (our subnet's CIDR), which means a packet from the public internet can never match — public IPs aren't in that range. So even if someone discovered the DB's internal IP, they'd have no path to reach it. This is the rule that turns "no external IP" from a hopeful claim into an enforced reality.
 
 ```bash
 gcloud compute firewall-rules create allow-internal-db \

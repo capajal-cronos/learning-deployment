@@ -146,6 +146,15 @@ Even on a tutorial DB, please do this once so you know how:
 sudo -u postgres pg_dump taskboard | gzip > /tmp/taskboard-$(date +%F).sql.gz
 ```
 
+A **dump** is a snapshot of your database written out as a file — basically a big list of SQL statements (`CREATE TABLE...`, `INSERT INTO...`) that, when replayed, recreate the database exactly as it was at that moment. `pg_dump` produces it, `gzip` compresses it, and to restore you'd pipe it back into `psql`.
+
+**Why bother dumping?** A database lives on one disk on one VM. If that disk dies, the VM gets deleted, someone runs `DROP TABLE` by accident, or a bad migration corrupts the data — everything is gone. A dump is your insurance: a portable, self-contained file you can copy off the VM and restore later. Concretely, dumps let you:
+
+- **Recover from disasters** — disk failure, accidental deletes, botched migrations.
+- **Move the database** — to a new VM, a managed service like Cloud SQL, or another environment.
+- **Clone data for testing** — restore a prod dump into a staging DB to reproduce a bug with real-shaped data.
+- **Time-travel** — keep dated dumps so you can check "what did the data look like last Tuesday?"
+
 In a real deployment you'd:
 
 - Run `pg_dump` on a schedule.

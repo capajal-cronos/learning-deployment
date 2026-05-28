@@ -6,11 +6,26 @@
 Conventions used below:
 - `<name>`       — your app/project prefix (used for VM names, VPC, repo, etc.)
 - `<project>`    — your GCP project ID
-- `<region>`     — e.g. `europe-west4`
-- `<zone>`       — e.g. `europe-west4-a`
+- `<region>`     — e.g. `europe-west1`
+- `<zone>`       — e.g. `europe-west1-a`
 - `<sha>`        — short git SHA used as image tag
 - `<cidr>`       — your subnet range, e.g. `10.10.0.0/24`
+- `<vm>`         — any VM name, e.g. `<name>-app` or `<name>-db`. Most `gcloud compute instances …` subcommands accept multiple `<vm>` arguments to act on several VMs at once.
 - `<github-org>/<repo>` — your GitHub repo path
+
+### Where do I run these commands?
+
+| Command shape | Run it on |
+|---|---|
+| `gcloud …`                                  | **Your laptop** (talks to the GCP API over HTTPS) |
+| `docker build`, `docker push` (GCP image)   | **Your laptop** |
+| `gcloud compute ssh … -- "<cmd>"`           | **Your laptop** — `gcloud` opens the SSH tunnel and runs `<cmd>` remotely for you |
+| `sudo docker ps/logs/run …`                 | **Inside the VM** (after `gcloud compute ssh …`) |
+| `sudo journalctl …`, `sudo cat /var/log/…`  | **Inside the VM** |
+| `nc -vz <name>-db 5432`, `psql … <name>-db` | **Inside the VM** (internal DNS like `<name>-db` only resolves from inside the VPC) |
+| `getent hosts <name>-db`                    | **Inside the VM** |
+
+If you see a command that uses an internal hostname (`<name>-db`) or `sudo`, assume it's "inside the VM" unless the surrounding text says otherwise.
 
 ---
 
@@ -91,6 +106,39 @@ gcloud services enable \
   secretmanager.googleapis.com
 ```
 
+### "Where am I?" — sanity checks
+
+When a `404` or empty list surprises you, it's almost always wrong project or wrong account. Check first, panic later.
+
+```bash
+# Which account + project is active right now?
+gcloud config get-value account
+gcloud config get-value project
+gcloud auth list                           # all logged-in accounts, * marks active
+gcloud projects list                       # every project the active account can see
+
+# Switch account / project
+gcloud config set account <email>
+gcloud config set project  <project>
+
+# Resources in the active project
+gcloud compute instances list              # ALL zones in active project (empty = none)
+gcloud compute instances list --zones=<zone>
+
+# Hunt for VMs across EVERY project the active account can see
+for p in $(gcloud projects list --format="value(projectId)"); do
+  echo "=== $p ==="
+  gcloud compute instances list --project="$p" 2>/dev/null
+done
+
+# Was something deleted? Who deleted it, and when?
+gcloud logging read 'protoPayload.methodName="v1.compute.instances.delete"' \
+  --limit=10 \
+  --format="value(timestamp, protoPayload.resourceName, protoPayload.authenticationInfo.principalEmail)"
+```
+
+Stopping a VM (`instances stop`) ≠ deleting it. Stopped VMs still show up in `instances list` with status `TERMINATED`. If `list` is empty, the VM is gone — or you're looking in the wrong place.
+
 ---
 
 ## 4. VPC + subnet
@@ -107,16 +155,126 @@ gcloud compute networks subnets create <subnet-name> \
 # Inspect
 gcloud compute networks list
 gcloud compute networks subnets list --filter="network~<name>-vpc"
-gcloud compute routes list                 --filter="network=<name>-vpc"
-gcloud compute firewall-rules list         --filter="network=<name>-vpc"
+gcloud compute routes list --filter="network=<name>-vpc"
+gcloud compute firewall-rules list --filter="network=<name>-vpc" --format=json
+```
+
+### Cloud NAT (outbound internet for `--no-address` VMs)
+
+Without this, private VMs can't reach apt repos and startup scripts that install packages will fail.
+
+```bash
+# Router + NAT (must exist BEFORE you create the DB VM)
+gcloud compute routers create <name>-router \
+  --network=<name>-vpc --region=<region>
+
+gcloud compute routers nats create <name>-nat \
+  --router=<name>-router --region=<region> \
+  --nat-all-subnet-ip-ranges --auto-allocate-nat-external-ips
+
+# Inspect
+gcloud compute routers nats list --router=<name>-router --region=<region>
+
+# Teardown (during cleanup)
+gcloud compute routers nats   delete <name>-nat    --router=<name>-router --region=<region> --quiet
+gcloud compute routers        delete <name>-router --region=<region> --quiet
 ```
 
 ---
 
 ## 5. Firewall rules
 
+### Generic shape
+
 ```bash
-# SSH ONLY via Google's IAP range (no public 22)
+gcloud compute firewall-rules create <rule-name> \
+  --network=<vpc> \
+  --direction=INGRESS \          # or EGRESS
+  --action=ALLOW \               # or DENY
+  --rules=<proto>:<port> \       # e.g. tcp:22 | tcp:80,tcp:443 | tcp:5432 | tcp (all TCP) | icmp
+  --source-ranges=<cidr> \       # 0.0.0.0/0 (anywhere) | <subnet-cidr> | 35.235.240.0/20 (Google IAP)
+  --target-tags=<tag>            # VMs with this network tag receive the rule; comma-separated for multiple
+```
+
+Names are **project-global** (not per-VPC), so two rules can't share a name even across networks.
+
+### Useful source ranges to remember
+
+| Source | What it means |
+|---|---|
+| `0.0.0.0/0` | The entire public internet — use sparingly, only for genuine public-facing ports. |
+| `<your-subnet-cidr>` (e.g. `10.10.0.0/24`) | Only traffic that originates inside your VPC subnet — typical for internal DBs/caches. |
+| `35.235.240.0/20` | Google's IAP tunnel range — only authenticated `gcloud compute ssh --tunnel-through-iap` sessions arrive from here. |
+| `<office-public-ip>/32` | A single specific IP (e.g. your office or VPN). |
+
+### Inspect / list / find
+
+```bash
+# All rules in a VPC (note the ~ for substring match — = doesn't work, network field is a URL)
+gcloud compute firewall-rules list --filter="network~<vpc>"
+
+# Just the rules touching a specific port
+gcloud compute firewall-rules list \
+  --filter="allowed.ports:22" \
+  --format="table(name, network.basename(), sourceRanges.list():label=SRC_RANGES, targetTags.list():label=TARGET_TAGS)"
+
+# Show every field of one rule
+gcloud compute firewall-rules describe <rule-name>
+
+# Just the fields that matter (compact one-liner)
+gcloud compute firewall-rules describe <rule-name> \
+  --format='value(network.basename(), direction, allowed, sourceRanges, targetTags)'
+
+# Sweep through several rules and check their current state
+for r in <rule-name-1> <rule-name-2> <rule-name-3>; do
+  echo "=== $r ==="
+  gcloud compute firewall-rules describe "$r" \
+    --format='value(network.basename(), direction, sourceRanges, allowed, targetTags)' 2>/dev/null \
+    || echo "(does not exist)"
+done
+```
+
+### Update (in-place) and delete
+
+```bash
+# Edit specific fields without recreating. NOTE: --network can NOT be changed; delete+recreate for that.
+gcloud compute firewall-rules update <rule-name> --source-ranges=<new-cidr>
+gcloud compute firewall-rules update <rule-name> --rules=tcp:443
+gcloud compute firewall-rules update <rule-name> --target-tags=<tag-a>,<tag-b>
+gcloud compute firewall-rules update <rule-name> --disabled       # turn the rule off (kept for re-enable)
+gcloud compute firewall-rules update <rule-name> --no-disabled    # turn it back on
+
+# Delete a rule (single or multiple names)
+gcloud compute firewall-rules delete <rule-name> --quiet
+gcloud compute firewall-rules delete <rule-1> <rule-2> <rule-3> --quiet
+
+# Bulk-delete by prefix
+for r in $(gcloud compute firewall-rules list --filter="name~^<prefix>-" --format='value(name)'); do
+  gcloud compute firewall-rules delete "$r" --quiet
+done
+```
+
+### Debug a blocked / leaking packet
+
+```bash
+# Recent DENIED packets in the VPC (requires firewall logging enabled on the rule)
+gcloud logging read 'resource.type="gce_subnetwork" AND jsonPayload.disposition="DENIED"' \
+  --limit=10 --format='value(timestamp, jsonPayload.connection)'
+
+# Enable / disable logging on an existing rule
+gcloud compute firewall-rules update <rule-name> --enable-logging
+gcloud compute firewall-rules update <rule-name> --no-enable-logging
+
+# From the source VM (run inside the VM), confirm it can actually reach the target port:
+nc -vz <target-internal-ip-or-hostname> <port>
+```
+
+### Project-specific rules in this tutorial
+
+For reference, the three rules we create:
+
+```bash
+# SSH only via Google's IAP range (no public 22)
 gcloud compute firewall-rules create allow-ssh-from-iap \
   --network=<name>-vpc --direction=INGRESS --action=ALLOW \
   --rules=tcp:22 --source-ranges=35.235.240.0/20 \
@@ -153,31 +311,35 @@ gcloud compute instances create <name>-app \
   --image-family=debian-12 --image-project=debian-cloud \
   --subnet=<subnet-name> --tags=app \
   --metadata-from-file=startup-script=scripts/startup-app.sh
+```
 
+### Inspect + lifecycle
+
+```bash
 # Inspect
 gcloud compute instances list
-gcloud compute instances describe <name>-app
+gcloud compute instances describe <vm>
 
-# Lifecycle
-gcloud compute instances stop  <name>-app <name>-db   # pause (saves compute, not disk)
-gcloud compute instances start <name>-app <name>-db
-gcloud compute instances reset <name>-db              # reboot (startup script runs ONCE per VM, not on reset)
-gcloud compute instances delete <name>-app <name>-db  # delete (saves everything)
+# Lifecycle — pass multiple <vm> names to act on several at once,
+# e.g. `gcloud compute instances stop <name>-app <name>-db`
+gcloud compute instances stop   <vm>   # pause (saves compute, not disk)
+gcloud compute instances start  <vm>
+gcloud compute instances reset  <vm>   # reboot (startup script runs ONCE per VM, not on reset)
+gcloud compute instances delete <vm>   # delete (frees everything)
 
 # Metadata (e.g. inject the DB password BEFORE first boot)
-gcloud compute instances add-metadata <name>-db \
+gcloud compute instances add-metadata <vm> \
   --metadata=db-password='<strong-password>'
 ```
 
 ### SSH (always via IAP — never expose port 22)
 
 ```bash
-gcloud compute ssh <name>-app --tunnel-through-iap
-gcloud compute ssh <name>-db  --tunnel-through-iap
-gcloud compute ssh <name>-app --tunnel-through-iap --troubleshoot   # diagnose hangs
+gcloud compute ssh <vm> --tunnel-through-iap
+gcloud compute ssh <vm> --tunnel-through-iap --troubleshoot   # diagnose hangs
 
-# One-shot remote command
-gcloud compute ssh <name>-app --tunnel-through-iap -- \
+# One-shot remote command (runs on <vm>, output back on your laptop)
+gcloud compute ssh <vm> --tunnel-through-iap -- \
   "sudo docker ps; sudo docker logs --tail=100 <name>-backend"
 ```
 
@@ -185,6 +347,76 @@ If you get an IAP IAM error:
 ```bash
 gcloud projects add-iam-policy-binding $(gcloud config get-value project) \
   --member="user:<YOUR_EMAIL>" --role="roles/iap.tunnelResourceAccessor"
+```
+
+### Find IPs and other quick lookups
+
+```bash
+# External IP (only VMs created without --no-address have one)
+gcloud compute instances describe <vm> \
+  --format='get(networkInterfaces[0].accessConfigs[0].natIP)'
+
+# Internal IP (every VM has one, on the subnet CIDR)
+gcloud compute instances describe <vm> \
+  --format='get(networkInterfaces[0].networkIP)'
+
+# Both IPs + status for every VM, as a clean table
+gcloud compute instances list \
+  --format='table(name, zone.basename(), status, networkInterfaces[0].networkIP:label=INTERNAL, networkInterfaces[0].accessConfigs[0].natIP:label=EXTERNAL)'
+
+# Just the status (RUNNING / TERMINATED / STOPPING / …)
+gcloud compute instances describe <vm> --format='get(status)'
+
+# Tags (decide which firewall rules apply)
+gcloud compute instances describe <vm> --format='get(tags.items)'
+
+# Boot-disk size + type
+gcloud compute instances describe <vm> \
+  --format='get(disks[0].diskSizeGb, disks[0].type.basename())'
+
+# All custom metadata keys
+gcloud compute instances describe <vm> \
+  --format='value(metadata.items.key)'
+
+# Read one specific metadata value
+gcloud compute instances describe <vm> \
+  --format='value(metadata.items.filter("key:db-password").extract(value))'
+```
+
+### When the VM won't boot or SSH hangs
+
+```bash
+# Serial console output — shows the boot sequence BEFORE SSH is available
+gcloud compute instances get-serial-port-output <vm>
+
+# Tail the last 200 lines (most recent boot)
+gcloud compute instances get-serial-port-output <vm> | tail -200
+
+# Live serial console (Ctrl-] to exit)
+gcloud compute connect-to-serial-port <vm>
+```
+
+The serial console is your friend when SSH itself is broken — startup script crashed, networking misconfigured, disk full, etc.
+
+### Resize / rescale a VM
+
+```bash
+# Change machine type (VM must be STOPPED first)
+gcloud compute instances stop <vm>
+gcloud compute instances set-machine-type <vm> --machine-type=e2-medium
+gcloud compute instances start <vm>
+
+# Grow the boot disk (online — no stop needed; filesystem resizes on next boot)
+gcloud compute disks resize <vm> --size=30GB
+```
+
+### Discoverability helpers
+
+```bash
+gcloud compute zones list                              # all zones
+gcloud compute regions list                            # all regions
+gcloud compute machine-types list --zones=<zone>       # what VM sizes are available
+gcloud compute images list --filter="family~debian"    # find image families
 ```
 
 ---
@@ -321,6 +553,7 @@ gcloud monitoring uptime create <name>-healthz \
 # Method A: re-run a previous green workflow in the GitHub Actions UI.
 
 # Method B: pin an older image on the VM
+# ↓ run on VM (after: gcloud compute ssh <name>-app --tunnel-through-iap)
 PREV_SHA=<known-good-short-sha>
 BASE=<region>-docker.pkg.dev/<project>/<repo-name>
 sudo docker pull "${BASE}/<service>:${PREV_SHA}"
@@ -335,23 +568,23 @@ This is why every image is tagged with the git SHA.
 ## 12. Troubleshooting one-liners
 
 ```bash
-# What's actually running + last 100 log lines (single best command)
+# local — what's actually running + last 100 log lines (single best command)
 gcloud compute ssh <name>-app --tunnel-through-iap -- \
   "sudo docker ps; sudo docker logs --tail=100 <name>-backend; sudo docker logs --tail=100 <name>-frontend"
 
-# Did the startup script run?
+# on VM — did the startup script run?
 sudo cat /var/log/startup-complete.log
 sudo journalctl -u google-startup-scripts.service -e
 
-# Test DB reachability from the app VM
+# on VM (app VM) — test DB reachability over the internal network
 sudo apt-get install -y netcat-openbsd postgresql-client
 nc -vz <name>-db 5432
 psql "postgresql://<db-user>:<password>@<name>-db:5432/<db-name>" -c "\l"
 
-# Internal DNS check
+# on VM — internal DNS check
 getent hosts <name>-db
 
-# Local "port already allocated"
+# local — "port already allocated" on your laptop
 lsof -iTCP:3000 -sTCP:LISTEN          # macOS / Linux
 Get-NetTCPConnection -LocalPort 3000  # PowerShell
 ```
@@ -369,6 +602,9 @@ gcloud compute instances delete <name>-app <name>-db --zone=<zone> --quiet
 for r in allow-ssh-from-iap allow-http-public allow-internal-db; do
   gcloud compute firewall-rules delete "$r" --quiet
 done
+# NAT must go BEFORE the router; router BEFORE the subnet/VPC.
+gcloud compute routers nats delete <name>-nat --router=<name>-router --region=<region> --quiet
+gcloud compute routers      delete <name>-router --region=<region> --quiet
 gcloud compute networks subnets delete <subnet-name> --region=<region> --quiet
 gcloud compute networks delete <name>-vpc --quiet
 gcloud artifacts repositories delete <repo-name> --location=<region> --quiet

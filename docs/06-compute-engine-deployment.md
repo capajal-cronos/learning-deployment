@@ -135,6 +135,8 @@ If you'd rather not set defaults, add `--zone=europe-west1-b` to each `create` c
 
 ### 4b. DB VM (internal only)
 
+> ⚠️ **Prerequisite: Cloud NAT must exist first.** The DB VM is created with `--no-address`, so its startup script can only reach `apt.postgresql.org` and `deb.debian.org` if outbound NAT is in place. If you skip this, the script will time out, no `postgres` user gets created, and chapter 07's `pg_dump` step will fail with `sudo: unknown user postgres`. See chapter 05, section 8 ("Cloud NAT").
+
 ```bash
 gcloud compute instances create taskboard-db \
   --machine-type=e2-small \
