@@ -449,21 +449,64 @@ Tag every image with the **git SHA** (immutable, rollbackable). Avoid `:latest` 
 
 ## 8. Secret Manager
 
+Secret Manager is **general-purpose** — any value your app shouldn't see in code or env files belongs here: API keys (Stripe, OpenAI, SendGrid…), DB passwords, JWT signing keys, webhook signing keys, third-party OAuth client secrets, SSH private keys, TLS certs. Treat it as the project-wide vault.
+
 ```bash
+# One-time: enable the API in this project
+gcloud services enable secretmanager.googleapis.com
+
+# List all secrets in the project (start here when you forget what exists)
+gcloud secrets list
+
 # Create
 echo -n "<value>" | gcloud secrets create <secret-name> \
   --replication-policy=automatic --data-file=-
 
-# Read latest
+# Describe one (created/updated timestamps, replication, labels)
+gcloud secrets describe <secret-name>
+
+# List all versions of a secret (ENABLED / DISABLED / DESTROYED)
+gcloud secrets versions list <secret-name>
+
+# Read latest value
 gcloud secrets versions access latest --secret=<secret-name>
+
+# Read a specific version
+gcloud secrets versions access 2 --secret=<secret-name>
 
 # Rotate (creates version 2, 3, …)
 echo -n "<new-value>" | gcloud secrets versions add <secret-name> --data-file=-
+
+# Disable / re-enable a version (without deleting it)
+gcloud secrets versions disable 1 --secret=<secret-name>
+gcloud secrets versions enable  1 --secret=<secret-name>
+
+# Permanently destroy a version (irreversible — value is gone)
+gcloud secrets versions destroy 1 --secret=<secret-name>
+
+# Grant a service account read access
+gcloud secrets add-iam-policy-binding <secret-name> \
+  --member="serviceAccount:<sa>@<project>.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+# Who currently has access?
+gcloud secrets get-iam-policy <secret-name>
+
+# Delete the whole secret (all versions, irreversible)
+gcloud secrets delete <secret-name>
 ```
 
 ---
 
 ## 9. Workload Identity Federation (CI/CD without JSON keys)
+
+**Windows / PowerShell:** use the ready-made script (handles SA propagation lag + retries):
+
+```powershell
+.\scripts\setup-wif.ps1 -Repo "<github-org>/<repo>"
+```
+
+**macOS / Linux / WSL:** the bash recipe below does the same thing. After SA creation, give it ~10s before the role bindings, or be ready to retry the first one — IAM propagation is eventual.
 
 ```bash
 PROJECT_ID=$(gcloud config get-value project)

@@ -12,9 +12,9 @@
 #   GCP access token via a Workload Identity Pool we set up once.
 #
 # Required GitHub secrets (Settings → Secrets and variables → Actions):
-#   GCP_PROJECT_ID            e.g. taskboard-learning-1
+#   GCP_PROJECT_ID            e.g. alban-test-1
 #   GCP_REGION                e.g. europe-west1
-#   GCP_ZONE                  e.g. europe-west1-a
+#   GCP_ZONE                  e.g. europe-west1-b
 #   GCP_WIF_PROVIDER          projects/<num>/locations/global/workloadIdentityPools/<pool>/providers/<provider>
 #   GCP_DEPLOYER_SA           github-deployer@<project>.iam.gserviceaccount.com
 #   ARTIFACT_REPO             taskboard          (the Artifact Registry repo name)

@@ -106,6 +106,19 @@ permissions:
 
 ## 4. The CI jobs (testing and linting)
 
+> 💡 **What's "linting" and what's "ruff"?**
+> **Linting** is automated static analysis — a tool reads your source code *without running it* and flags style violations (PEP 8), unused imports, likely bugs (mutable default args, shadowed names), inconsistent import order, forgotten `print()` calls, and so on. It catches a class of issues tests don't catch: tests check **behavior**, linters check the **code itself**. Cheap, runs in milliseconds, gives instant feedback before a human reviewer ever sees the PR.
+>
+> **Ruff** is the modern Python linter — written in Rust, ~10–100× faster than older tools. It replaces a whole stack (`flake8` + `pylint` + `isort` + `pyupgrade` + `black`) with one binary and one config. Most Python projects started in 2024+ just use ruff. Common subcommands:
+>
+> ```bash
+> ruff check app tests        # report problems (this is the CI gate below)
+> ruff check --fix app tests  # report AND auto-fix what it can
+> ruff format app tests       # apply black-style formatting
+> ```
+>
+> If `ruff check` finds anything, it exits non-zero and the CI job fails — the PR can't merge until it's clean.
+
 The backend job:
 
 ```yaml
@@ -151,6 +164,22 @@ GitHub Actions          GCP STS                     GCP API
 
 ### Setting it up (do this once)
 
+The block below is **bash** — it uses `$()`, `for ... do ... done`, and `\` line continuations that PowerShell can't parse, so pasting it into a Windows terminal will fail.
+
+Use the ready-made script instead:
+
+```powershell
+# From the repo root, in PowerShell:
+.\scripts\setup-wif.ps1 -Repo "<your-github-user>/<your-repo>"
+```
+
+It runs the same four steps shown below, then prints the two values you'll paste into your GitHub repo secrets (`GCP_WIF_PROVIDER` and `GCP_SA_EMAIL`).
+
+> 💡 **On macOS / Linux / WSL** you can paste the bash version straight into your shell — just edit the `REPO=` line first.
+
+<details>
+<summary>What the script actually runs (the bash equivalent)</summary>
+
 ```bash
 PROJECT_ID=$(gcloud config get-value project)
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
@@ -193,6 +222,7 @@ gcloud iam service-accounts add-iam-policy-binding "${SA}@${PROJECT_ID}.iam.gser
 # 5) Print the value you need for the GitHub secret GCP_WIF_PROVIDER.
 echo "projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL}/providers/${PROVIDER}"
 ```
+</details>
 
 > ⚠️ **The `attribute-condition`** is the key security control: even if some other GitHub repo tried to impersonate this SA, GCP would reject it because `assertion.repository` wouldn't match.
 

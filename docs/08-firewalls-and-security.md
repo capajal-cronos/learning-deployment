@@ -196,7 +196,62 @@ That's already more than minimum, but each role has a clear story. Avoid `roles/
 
 So far we've been hand-waving the secrets. Let's do it right.
 
-Create the secrets:
+### 4.0 What is `jwt-secret` actually for?
+
+Chapter 01 introduced JWTs briefly. Before we lock the secret away, it's worth understanding what we're storing and *why losing it is catastrophic*.
+
+**The problem JWTs solve.** HTTP is stateless — the server forgets you the moment a request ends. After a user logs in with `POST /auth/login`, every *next* request (`GET /tasks`, `POST /tasks`, …) needs to prove "I'm still that same user". Two reasonable approaches exist:
+
+1. **Server-side sessions** — the server keeps a `session_id → user_id` table in Redis or the DB. The client sends back a cookie. Works fine, but every server instance needs to share that state.
+2. **JWTs** — the server hands the client a *signed* token at login time. The client sends it back on every request. The server verifies the signature and trusts the claim. **No lookup, no shared state.** This is what this app uses.
+
+**What's actually in the token.** From `backend/app/auth.py` (`create_access_token`):
+
+```python
+payload = {
+    "sub": str(user_id),     # "this token belongs to user 42"
+    "iat": ...,              # issued-at timestamp
+    "exp": ...,              # expires-at timestamp
+}
+return jwt.encode(payload, settings.jwt_secret, algorithm=...)
+```
+
+The payload is plain JSON. The interesting bit is the **signature**: `jwt.encode` HMACs the payload with `jwt_secret`. Anyone can read the payload (it's base64, not encrypted), but only someone holding `jwt_secret` can produce a valid signature for it.
+
+**The verification half** is `get_current_user`. It pulls the `Authorization: Bearer <token>` header, runs `jwt.decode(token, settings.jwt_secret, ...)`, and trusts whatever `sub` the payload claims — *because the signature proves the server itself issued this token*.
+
+**Why the secret has to live in Secret Manager.**
+
+- Anyone who knows `jwt_secret` can forge a token claiming `sub: 1` (or any user_id) and instantly bypass login for that user.
+- So the secret must be: long and random (≥ 32 bytes), never in git, never in logs, rotatable. Secret Manager gives you all three.
+
+`db-password` is unrelated to auth — it's just the Postgres user's password, another credential we don't want hardcoded. Same treatment for the same reasons.
+
+### 4.1 Enable the Secret Manager API
+
+Like every GCP service, Secret Manager has to be **enabled per project** before you can use it. On a fresh project, your very first `gcloud secrets ...` call will fail with:
+
+```
+ERROR: ... Secret Manager API has not been used in project <id> before or it is disabled.
+```
+
+Enable it once:
+
+```bash
+gcloud services enable secretmanager.googleapis.com
+```
+
+Wait ~30 seconds for the activation to propagate, then continue.
+
+> ⚠️ **Pitfall — propagation is eventual, not instant**
+> Even after `enable` returns "finished successfully", the activation has to fan out to every region's API frontends. It's normal for the **first** `gcloud secrets ...` call to succeed and the **next** one (seconds later) to still fail with `SERVICE_DISABLED`. Don't re-enable, don't panic — just wait ~30–60 seconds and retry the failed command.
+
+> 🖥️ **In the UI:** Console → **APIs & Services → Library**, search "Secret Manager API", click **Enable**. Same effect as the CLI command.
+
+> 💡 **Why APIs are disabled by default**
+> GCP keeps every service off until you opt in. That keeps the attack surface (and the per-project quota footprint) small, and it forces you to make an explicit decision before a new service can be called from your project. You'll do this `services enable` dance for every new service the first time you reach for it.
+
+### 4.2 Create the secrets
 
 ```bash
 echo -n "a-really-long-random-string-32-chars-min" | \
@@ -205,6 +260,22 @@ echo -n "a-really-long-random-string-32-chars-min" | \
 echo -n "a-strong-postgres-password" | \
   gcloud secrets create db-password --replication-policy=automatic --data-file=-
 ```
+
+> 💡 **What is `echo -n ... | gcloud ... --data-file=-` doing?**
+> Two pieces, both load-bearing:
+>
+> - **`--data-file=-`** tells gcloud "read the secret value from **stdin**" instead of from a file on disk. We use this so the secret never has to be written to a file (where it could end up in shell history, a backup, or accidentally committed to git).
+> - **`echo -n`** prints the string **without a trailing newline**. Plain `echo "secret"` would actually store `secret\n` in Secret Manager — your app would later compare `"secret"` against `"secret\n"` and silently fail to authenticate or connect, with no obvious clue why. The `-n` flag is the entire reason this idiom exists.
+>
+> Alternatives, for context:
+>
+> ```bash
+> # Interactive — gcloud prompts you for the value
+> gcloud secrets create jwt-secret --replication-policy=automatic
+>
+> # From a file (then remember to shred it afterward)
+> gcloud secrets create jwt-secret --replication-policy=automatic --data-file=./secret.txt
+> ```
 
 Read them back (as your user, just to confirm):
 
@@ -235,6 +306,14 @@ internet → [HTTPS LB w/ managed cert] → instance group → app VM(s)
 ```
 
 The load balancer terminates TLS, attaches a managed (free) certificate, and forwards to your VM over the VPC. This is one of the few things in GCP that is *both* a network resource and an HTTPS terminator.
+
+> 💡 **TLS in one breath**
+> **TLS** (Transport Layer Security) is the encryption layer that turns plain HTTP into HTTPS — `HTTPS = HTTP wrapped in TLS`. It's the successor to SSL; people still say "SSL certificate" out of habit but mean the same thing. "Terminating TLS" just means: do the decryption here, then forward plain HTTP onward.
+
+> 💡 **What's an "instance group"?**
+> A GCP resource that bundles one or more VMs so they can be addressed as a single thing. The flavor you'll almost always want is a **Managed Instance Group (MIG)** — every VM is spun up from one shared **instance template**, and GCP will auto-scale, auto-heal (replace failing VMs), and roll out updates N-at-a-time for you. A load balancer doesn't forward to "a VM" directly; it forwards to a **backend service** that points at an instance group, and the LB picks a healthy VM from the group for each request. That indirection is what gives you horizontal scaling and zero-downtime deploys.
+>
+> **Our tutorial has no instance group** — there's just one app VM with its own external IP. The diagram above is what production looks like, not what we built. Chapter 13 walks through the upgrade.
 
 For this tutorial we keep it simpler:
 
